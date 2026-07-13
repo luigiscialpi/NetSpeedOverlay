@@ -152,8 +152,8 @@ class NetSpeedOverlayService : LifecycleService() {
             setPadding(0, 0, 0, 0)
             setLineSpacing(0f, 1f)
         }
-        root.addView(download)
         root.addView(upload)
+        root.addView(download)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -284,12 +284,13 @@ class NetSpeedOverlayService : LifecycleService() {
         // be negative) instead of padding so that 0 dp really means "lines
         // touching": we subtract the font's own leading gap at 0 so the
         // residual fixed spacing disappears, and positive values add from there.
-        uploadText?.let { tv ->
+        (root.getChildAt(1) as? TextView)?.let { tv ->
             val lp = (tv.layoutParams as? LinearLayout.LayoutParams)
                 ?: LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 )
+
             if (settings.displayMode == DisplayMode.INLINE) {
                 tv.setPadding(dp(6), 0, 0, 0)
                 lp.leftMargin = 0
@@ -299,6 +300,7 @@ class NetSpeedOverlayService : LifecycleService() {
                 lp.leftMargin = 0
                 lp.topMargin = dp(settings.lineSpacingDp) - leadingGapPx(tv)
             }
+
             tv.layoutParams = lp
         }
     }
