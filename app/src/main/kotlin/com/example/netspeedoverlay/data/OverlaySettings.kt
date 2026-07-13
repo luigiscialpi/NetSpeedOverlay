@@ -21,6 +21,12 @@ data class OverlaySettings(
     val dimWhenIdle: Boolean = true,
     val idleThresholdBytesPerSec: Long = 1024L, // 1 KB/s
     val idleAlpha: Float = 0.35f,
+    // Colori personalizzabili dell'overlay. Android non espone l'aspetto
+    // (chiaro/scuro) della navigation bar dell'app in primo piano, quindi
+    // l'utente imposta qui i colori per abbinarli a quelli della sua barra.
+    val textColorArgb: Int = 0xFFFFFFFF.toInt(),       // bianco
+    val backgroundColorArgb: Int = 0xAA000000.toInt(),   // nero ~67% opaco
+    val showBackground: Boolean = true,
     // Posizionamento libero: se attivo, l'overlay può essere trascinato
     // ovunque sullo schermo e la posizione (in dp dall'angolo alto-sinistra)
     // viene salvata qui, ignorando horizontalPosition/verticalOffsetDp.

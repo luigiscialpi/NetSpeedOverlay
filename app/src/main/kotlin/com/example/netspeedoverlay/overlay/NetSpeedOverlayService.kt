@@ -54,6 +54,7 @@ class NetSpeedOverlayService : LifecycleService() {
     private var overlayRoot: LinearLayout? = null
     private var downloadText: TextView? = null
     private var uploadText: TextView? = null
+    private var overlayBackground: GradientDrawable? = null
     private var layoutParams: WindowManager.LayoutParams? = null
 
     private var currentSettings: OverlaySettings = OverlaySettings()
@@ -127,19 +128,17 @@ class NetSpeedOverlayService : LifecycleService() {
     // ---------------------------------------------------------------
 
     private fun addOverlayView() {
+        val background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(10).toFloat()
+            setColor(0xAA000000.toInt()) // nero ~67% opaco
+        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(8), dp(3), dp(8), dp(3))
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(10).toFloat()
-                setColor(0xAA000000.toInt()) // nero ~67% opaco
-            }
+            this.background = background
         }
-        // includeFontPadding = false trims the built-in font metric padding
-        // so that a line spacing of 0 dp makes the two rows truly touch.
-        // Padding/line-spacing extras are zeroed so the icon glyphs don't add
-        // their own vertical/horizontal breathing room.
+        overlayBackground = background
         val download = TextView(this).apply {
             setTextColor(Color.WHITE)
             includeFontPadding = false
@@ -280,6 +279,12 @@ class NetSpeedOverlayService : LifecycleService() {
             tv?.textSize = settings.fontSizeSp.toFloat()
             tv?.typeface = if (settings.bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
         }
+
+        // Colore testo/sfondo: se "Abbina barra di sistema" è attivo, segui
+        // l'aspetto live della navigation bar (chiaro/scuro), altrimenti i
+        // valori di default (testo chiaro su sfondo scuro).
+        applyOverlayColors(settings)
+
         // Spacing before the second row. Uses a LayoutParams margin (which can
         // be negative) instead of padding so that 0 dp really means "lines
         // touching": we subtract the font's own leading gap at 0 so the
@@ -316,6 +321,21 @@ class NetSpeedOverlayService : LifecycleService() {
         val topGap = fm.ascent - fm.top          // whitespace above the glyphs
         val bottomGap = fm.bottom - fm.descent   // whitespace below the glyphs
         return (topGap + bottomGap).coerceAtLeast(0)
+    }
+
+    /**
+     * Applica il colore del testo e (se attivo) dello sfondo dell'overlay,
+     * entrambi personalizzabili dall'utente.
+     */
+    private fun applyOverlayColors(settings: OverlaySettings) {
+        downloadText?.setTextColor(settings.textColorArgb)
+        uploadText?.setTextColor(settings.textColorArgb)
+        if (settings.showBackground) {
+            overlayBackground?.setColor(settings.backgroundColorArgb)
+            overlayRoot?.background = overlayBackground
+        } else {
+            overlayRoot?.background = null
+        }
     }
 
     // ---------------------------------------------------------------

@@ -1,13 +1,20 @@
 package com.example.netspeedoverlay.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -114,6 +121,30 @@ fun SettingsScreen(
         }
 
         SectionLabel("Aspetto")
+        ColorSwatchRow(
+            label = "Colore testo",
+            swatches = listOf(
+                "Bianco" to 0xFFFFFFFF.toInt(),
+                "Nero" to 0xFF000000.toInt(),
+                "Grigio" to 0xFFAAAAAA.toInt()
+            ),
+            selected = settings.textColorArgb
+        ) { scope.launch { settingsRepository.setTextColorArgb(it) } }
+
+        SwitchSetting("Mostra sfondo", settings.showBackground) {
+            scope.launch { settingsRepository.setShowBackground(it) }
+        }
+        if (settings.showBackground) {
+            ColorSwatchRow(
+                label = "Colore sfondo",
+                swatches = listOf(
+                    "Scuro" to 0xAA000000.toInt(),
+                    "Chiaro" to 0xCCFFFFFF.toInt(),
+                    "Trasparente" to 0x00000000.toInt()
+                ),
+                selected = settings.backgroundColorArgb
+            ) { scope.launch { settingsRepository.setBackgroundColorArgb(it) } }
+        }
         SliderSetting("Dimensione testo", settings.fontSizeSp, 9..24, { "$it sp" }) {
             scope.launch { settingsRepository.setFontSizeSp(it) }
         }
@@ -189,6 +220,37 @@ private fun SliderSetting(
             valueRange = range.first.toFloat()..range.last.toFloat(),
             steps = (range.last - range.first - 1).coerceAtLeast(0)
         )
+    }
+}
+
+@Composable
+private fun ColorSwatchRow(
+    label: String,
+    swatches: List<Pair<String, Int>>,
+    selected: Int,
+    onSelect: (Int) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            swatches.forEach { (name, argb) ->
+                val isSelected = argb == selected
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(
+                            color = Color(argb.toLong() and 0xFFFFFFFFL),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .border(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Gray,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                        .clickable { onSelect(argb) }
+                )
+            }
+        }
     }
 }
 

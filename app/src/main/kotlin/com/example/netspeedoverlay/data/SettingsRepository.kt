@@ -33,6 +33,9 @@ class SettingsRepository(private val context: Context) {
         val UPDATE_INTERVAL_MS = longPreferencesKey("update_interval_ms")
         val DIM_WHEN_IDLE = booleanPreferencesKey("dim_when_idle")
         val IDLE_THRESHOLD_BYTES = longPreferencesKey("idle_threshold_bytes")
+        val TEXT_COLOR_ARGB = intPreferencesKey("text_color_argb")
+        val BACKGROUND_COLOR_ARGB = intPreferencesKey("background_color_argb")
+        val SHOW_BACKGROUND = booleanPreferencesKey("show_background")
         val FREE_POSITION = booleanPreferencesKey("free_position")
         val POS_X_DP = intPreferencesKey("pos_x_dp")
         val POS_Y_DP = intPreferencesKey("pos_y_dp")
@@ -58,6 +61,9 @@ class SettingsRepository(private val context: Context) {
             updateIntervalMs = prefs[Keys.UPDATE_INTERVAL_MS] ?: defaults.updateIntervalMs,
             dimWhenIdle = prefs[Keys.DIM_WHEN_IDLE] ?: defaults.dimWhenIdle,
             idleThresholdBytesPerSec = prefs[Keys.IDLE_THRESHOLD_BYTES] ?: defaults.idleThresholdBytesPerSec,
+            textColorArgb = prefs[Keys.TEXT_COLOR_ARGB] ?: defaults.textColorArgb,
+            backgroundColorArgb = prefs[Keys.BACKGROUND_COLOR_ARGB] ?: defaults.backgroundColorArgb,
+            showBackground = prefs[Keys.SHOW_BACKGROUND] ?: defaults.showBackground,
             freePosition = prefs[Keys.FREE_POSITION] ?: defaults.freePosition,
             posXDp = prefs[Keys.POS_X_DP] ?: defaults.posXDp,
             posYDp = prefs[Keys.POS_Y_DP] ?: defaults.posYDp
@@ -80,6 +86,9 @@ class SettingsRepository(private val context: Context) {
         it[Keys.POS_X_DP] = xDp
         it[Keys.POS_Y_DP] = yDp
     }
+    suspend fun setTextColorArgb(value: Int) = edit { it[Keys.TEXT_COLOR_ARGB] = value }
+    suspend fun setBackgroundColorArgb(value: Int) = edit { it[Keys.BACKGROUND_COLOR_ARGB] = value }
+    suspend fun setShowBackground(value: Boolean) = edit { it[Keys.SHOW_BACKGROUND] = value }
 
     private suspend fun edit(block: (MutablePreferences) -> Unit) {
         context.dataStore.edit(block)
