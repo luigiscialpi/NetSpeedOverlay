@@ -41,7 +41,8 @@ fun SettingsScreen(
     hasOverlayPermission: Boolean,
     onRequestOverlayPermission: () -> Unit,
     onStartOverlay: () -> Unit,
-    onStopOverlay: () -> Unit
+    onStopOverlay: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val settings by settingsRepository.settingsFlow.collectAsState(initial = OverlaySettings())
     val scope = rememberCoroutineScope()
@@ -52,7 +53,7 @@ fun SettingsScreen(
     var overlayRunning by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),

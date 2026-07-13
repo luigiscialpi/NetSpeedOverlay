@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
@@ -45,7 +46,8 @@ class MainActivity : ComponentActivity() {
                         hasOverlayPermission = hasOverlayPermission.value,
                         onRequestOverlayPermission = ::requestOverlayPermission,
                         onStartOverlay = { NetSpeedOverlayService.start(this) },
-                        onStopOverlay = { NetSpeedOverlayService.stop(this) }
+                        onStopOverlay = { NetSpeedOverlayService.stop(this) },
+                        modifier = Modifier.safeDrawingPadding()
                     )
                 }
             }
