@@ -1,0 +1,54 @@
+name: Build Release APK
+
+on:
+  push:
+    branches: ["master"]
+
+jobs:
+  build-release:
+    name: Build signed release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      # Detected from gradle-wrapper.properties (gradle-8.9) and
+      # app/build.gradle.kts (JavaVersion.VERSION_17 / jvmTarget "17").
+      # gradle/actions/setup-gradle also enables Gradle caching automatically
+      # (caches GRADLE_USER_HOME).
+      - name: Setup Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Recreate keystore from secret
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "${{ github.workspace }}/app/release.keystore"
+
+      - name: Export signing properties
+        run: |
+          {
+            echo "KEYSTORE_FILE=${{ github.workspace }}/app/release.keystore"
+            echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}"
+            echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}"
+            echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build signed Release APK
+        run: ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 30

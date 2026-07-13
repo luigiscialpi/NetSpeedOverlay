@@ -16,9 +16,33 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            val keystoreFile = System.getenv("KEYSTORE_FILE")
+                ?: project.findProperty("KEYSTORE_FILE")?.toString()
+            val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
+                ?: project.findProperty("KEYSTORE_PASSWORD")?.toString()
+            val keyAlias = System.getenv("KEY_ALIAS")
+                ?: project.findProperty("KEY_ALIAS")?.toString()
+            val keyPassword = System.getenv("KEY_PASSWORD")
+                ?: project.findProperty("KEY_PASSWORD")?.toString()
+
+            if (keystoreFile != null && keystorePassword != null &&
+                keyAlias != null && keyPassword != null
+            ) {
+                storeFile = file(keystoreFile)
+                storePassword = keystorePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
+                .takeIf { it.storeFile != null }
         }
     }
 
