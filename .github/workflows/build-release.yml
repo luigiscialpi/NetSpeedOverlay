@@ -8,6 +8,8 @@ jobs:
   build-release:
     name: Build signed release APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -45,10 +47,21 @@ jobs:
       - name: Build signed Release APK
         run: ./gradlew :app:assembleRelease --no-daemon
 
-      - name: Upload Release APK
+      - name: Upload Release APK (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Create rolling GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Release
+          body: |
+            Automated signed release APK built from commit ${{ github.sha }}.
+          files: app/build/outputs/apk/release/*.apk
+          overwrite: true
+          generate_release_notes: true
