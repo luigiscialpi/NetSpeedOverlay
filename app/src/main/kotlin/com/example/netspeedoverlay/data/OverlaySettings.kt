@@ -12,6 +12,7 @@ data class OverlaySettings(
     val horizontalPosition: HorizontalPosition = HorizontalPosition.RIGHT,
     val verticalOffsetDp: Int = 4,
     val displayMode: DisplayMode = DisplayMode.STACKED,
+    val lineSpacingDp: Int = 0, // spazio tra le due righe in modalità "Due righe"
     val iconStyle: IconStyle = IconStyle.ARROWS,
     val fontSizeSp: Int = 12,
     val bold: Boolean = false,
@@ -19,7 +20,13 @@ data class OverlaySettings(
     val updateIntervalMs: Long = 1500L,
     val dimWhenIdle: Boolean = true,
     val idleThresholdBytesPerSec: Long = 1024L, // 1 KB/s
-    val idleAlpha: Float = 0.35f
+    val idleAlpha: Float = 0.35f,
+    // Posizionamento libero: se attivo, l'overlay può essere trascinato
+    // ovunque sullo schermo e la posizione (in dp dall'angolo alto-sinistra)
+    // viene salvata qui, ignorando horizontalPosition/verticalOffsetDp.
+    val freePosition: Boolean = false,
+    val posXDp: Int = 0,
+    val posYDp: Int = 0
 )
 
 enum class HorizontalPosition { LEFT, CENTER, RIGHT }

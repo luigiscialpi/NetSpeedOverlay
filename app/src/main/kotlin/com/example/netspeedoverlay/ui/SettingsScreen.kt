@@ -74,16 +74,36 @@ fun SettingsScreen(
         HorizontalDivider()
 
         SectionLabel("Posizione")
-        ChoiceRow(HorizontalPosition.entries, settings.horizontalPosition, { it.label() }) {
-            scope.launch { settingsRepository.setHorizontalPosition(it) }
+        SwitchSetting("Posizione libera (trascina l'overlay)", settings.freePosition) {
+            scope.launch { settingsRepository.setFreePosition(it) }
         }
-        SliderSetting("Distanza dal bordo superiore", settings.verticalOffsetDp, 0..24, { "$it dp" }) {
-            scope.launch { settingsRepository.setVerticalOffsetDp(it) }
+        if (settings.freePosition) {
+            Text(
+                "Trascina l'indicatore per spostarlo ovunque sullo schermo, " +
+                    "anche sopra la status bar o la barra di navigazione. " +
+                    "La posizione viene salvata automaticamente.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            Button(onClick = { scope.launch { settingsRepository.setPosition(8, 120) } }) {
+                Text("Riporta in posizione raggiungibile")
+            }
+        } else {
+            ChoiceRow(HorizontalPosition.entries, settings.horizontalPosition, { it.label() }) {
+                scope.launch { settingsRepository.setHorizontalPosition(it) }
+            }
+            SliderSetting("Distanza dal bordo superiore", settings.verticalOffsetDp, 0..24, { "$it dp" }) {
+                scope.launch { settingsRepository.setVerticalOffsetDp(it) }
+            }
         }
 
         SectionLabel("Formato")
         ChoiceRow(DisplayMode.entries, settings.displayMode, { it.label() }) {
             scope.launch { settingsRepository.setDisplayMode(it) }
+        }
+        if (settings.displayMode == DisplayMode.STACKED) {
+            SliderSetting("Distanza tra le righe", settings.lineSpacingDp, -30..24, { "$it dp" }) {
+                scope.launch { settingsRepository.setLineSpacingDp(it) }
+            }
         }
         ChoiceRow(IconStyle.entries, settings.iconStyle, { it.label() }) {
             scope.launch { settingsRepository.setIconStyle(it) }

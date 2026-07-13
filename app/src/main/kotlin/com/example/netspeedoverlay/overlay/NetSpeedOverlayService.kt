@@ -13,6 +13,8 @@ import android.graphics.Typeface
 import android.os.Build
 import android.provider.Settings
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -134,8 +136,22 @@ class NetSpeedOverlayService : LifecycleService() {
                 setColor(0xAA000000.toInt()) // nero ~67% opaco
             }
         }
-        val download = TextView(this).apply { setTextColor(Color.WHITE) }
-        val upload = TextView(this).apply { setTextColor(Color.WHITE) }
+        // includeFontPadding = false trims the built-in font metric padding
+        // so that a line spacing of 0 dp makes the two rows truly touch.
+        // Padding/line-spacing extras are zeroed so the icon glyphs don't add
+        // their own vertical/horizontal breathing room.
+        val download = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            includeFontPadding = false
+            setPadding(0, 0, 0, 0)
+            setLineSpacing(0f, 1f)
+        }
+        val upload = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            includeFontPadding = false
+            setPadding(0, 0, 0, 0)
+            setLineSpacing(0f, 1f)
+        }
         root.addView(download)
         root.addView(upload)
 
@@ -160,7 +176,61 @@ class NetSpeedOverlayService : LifecycleService() {
         downloadText = download
         uploadText = upload
         layoutParams = params
+
+        setupDragHandling(root)
     }
+
+    /**
+     * When free-position mode is on, lets the user drag the overlay anywhere
+     * on screen and persists the final spot. No-op while anchored so the
+     * indicator stays click-through as before.
+     */
+    private fun setupDragHandling(root: View) {
+        var downRawX = 0f
+        var downRawY = 0f
+        var startXDp = 0
+        var startYDp = 0
+        var moved = false
+
+        root.setOnTouchListener { _, event ->
+            if (!currentSettings.freePosition) return@setOnTouchListener false
+            val params = layoutParams ?: return@setOnTouchListener false
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startXDp = pxToDp(params.x)
+                    startYDp = pxToDp(params.y)
+                    moved = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dxDp = pxToDp((event.rawX - downRawX).toInt())
+                    val dyDp = pxToDp((event.rawY - downRawY).toInt())
+                    if (kotlin.math.abs(event.rawX - downRawX) > 4 ||
+                        kotlin.math.abs(event.rawY - downRawY) > 4
+                    ) {
+                        moved = true
+                    }
+                    params.x = dp((startXDp + dxDp).coerceAtLeast(0))
+                    params.y = dp((startYDp + dyDp).coerceAtLeast(0))
+                    runCatching { windowManager.updateViewLayout(root, params) }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (moved) {
+                        val finalX = pxToDp(params.x)
+                        val finalY = pxToDp(params.y)
+                        lifecycleScope.launch { settingsRepository.setPosition(finalX, finalY) }
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun pxToDp(px: Int): Int = (px / resources.displayMetrics.density).toInt()
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
@@ -181,12 +251,23 @@ class NetSpeedOverlayService : LifecycleService() {
         val params = layoutParams ?: return
         val root = overlayRoot ?: return
 
-        params.gravity = when (settings.horizontalPosition) {
-            HorizontalPosition.LEFT -> Gravity.TOP or Gravity.START
-            HorizontalPosition.CENTER -> Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            HorizontalPosition.RIGHT -> Gravity.TOP or Gravity.END
+        if (settings.freePosition) {
+            // Draggable anywhere: anchor to top-left and use saved x/y, and
+            // make the window touchable so it can receive drag gestures.
+            params.gravity = Gravity.TOP or Gravity.START
+            params.x = dp(settings.posXDp)
+            params.y = dp(settings.posYDp)
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        } else {
+            params.gravity = when (settings.horizontalPosition) {
+                HorizontalPosition.LEFT -> Gravity.TOP or Gravity.START
+                HorizontalPosition.CENTER -> Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                HorizontalPosition.RIGHT -> Gravity.TOP or Gravity.END
+            }
+            params.x = 0
+            params.y = dp(settings.verticalOffsetDp)
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         }
-        params.y = dp(settings.verticalOffsetDp)
         runCatching { windowManager.updateViewLayout(root, params) }
 
         root.orientation = if (settings.displayMode == DisplayMode.STACKED) {
@@ -199,7 +280,40 @@ class NetSpeedOverlayService : LifecycleService() {
             tv?.textSize = settings.fontSizeSp.toFloat()
             tv?.typeface = if (settings.bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
         }
-        uploadText?.setPadding(if (settings.displayMode == DisplayMode.INLINE) dp(6) else 0, 0, 0, 0)
+        // Spacing before the second row. Uses a LayoutParams margin (which can
+        // be negative) instead of padding so that 0 dp really means "lines
+        // touching": we subtract the font's own leading gap at 0 so the
+        // residual fixed spacing disappears, and positive values add from there.
+        uploadText?.let { tv ->
+            val lp = (tv.layoutParams as? LinearLayout.LayoutParams)
+                ?: LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            if (settings.displayMode == DisplayMode.INLINE) {
+                tv.setPadding(dp(6), 0, 0, 0)
+                lp.leftMargin = 0
+                lp.topMargin = 0
+            } else {
+                tv.setPadding(0, 0, 0, 0)
+                lp.leftMargin = 0
+                lp.topMargin = dp(settings.lineSpacingDp) - leadingGapPx(tv)
+            }
+            tv.layoutParams = lp
+        }
+    }
+
+    /**
+     * The font's intrinsic leading whitespace (the extra space above the
+     * ascent and below the descent). Subtracting it from the top margin
+     * cancels the fixed minimum gap between the two stacked lines, so a
+     * line-spacing setting of 0 dp makes the rows visually touch.
+     */
+    private fun leadingGapPx(tv: TextView): Int {
+        val fm = tv.paint.fontMetricsInt
+        val topGap = fm.ascent - fm.top          // whitespace above the glyphs
+        val bottomGap = fm.bottom - fm.descent   // whitespace below the glyphs
+        return (topGap + bottomGap).coerceAtLeast(0)
     }
 
     // ---------------------------------------------------------------

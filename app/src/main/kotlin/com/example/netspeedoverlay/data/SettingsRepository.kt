@@ -25,6 +25,7 @@ class SettingsRepository(private val context: Context) {
         val HORIZONTAL_POSITION = stringPreferencesKey("horizontal_position")
         val VERTICAL_OFFSET_DP = intPreferencesKey("vertical_offset_dp")
         val DISPLAY_MODE = stringPreferencesKey("display_mode")
+        val LINE_SPACING_DP = intPreferencesKey("line_spacing_dp")
         val ICON_STYLE = stringPreferencesKey("icon_style")
         val FONT_SIZE_SP = intPreferencesKey("font_size_sp")
         val BOLD = booleanPreferencesKey("bold")
@@ -32,6 +33,9 @@ class SettingsRepository(private val context: Context) {
         val UPDATE_INTERVAL_MS = longPreferencesKey("update_interval_ms")
         val DIM_WHEN_IDLE = booleanPreferencesKey("dim_when_idle")
         val IDLE_THRESHOLD_BYTES = longPreferencesKey("idle_threshold_bytes")
+        val FREE_POSITION = booleanPreferencesKey("free_position")
+        val POS_X_DP = intPreferencesKey("pos_x_dp")
+        val POS_Y_DP = intPreferencesKey("pos_y_dp")
     }
 
     val settingsFlow: Flow<OverlaySettings> = context.dataStore.data.map { prefs ->
@@ -44,6 +48,7 @@ class SettingsRepository(private val context: Context) {
             displayMode = prefs[Keys.DISPLAY_MODE]
                 ?.let { runCatching { DisplayMode.valueOf(it) }.getOrNull() }
                 ?: defaults.displayMode,
+            lineSpacingDp = prefs[Keys.LINE_SPACING_DP] ?: defaults.lineSpacingDp,
             iconStyle = prefs[Keys.ICON_STYLE]
                 ?.let { runCatching { IconStyle.valueOf(it) }.getOrNull() }
                 ?: defaults.iconStyle,
@@ -52,13 +57,17 @@ class SettingsRepository(private val context: Context) {
             showPerSecondSuffix = prefs[Keys.SHOW_PER_SECOND_SUFFIX] ?: defaults.showPerSecondSuffix,
             updateIntervalMs = prefs[Keys.UPDATE_INTERVAL_MS] ?: defaults.updateIntervalMs,
             dimWhenIdle = prefs[Keys.DIM_WHEN_IDLE] ?: defaults.dimWhenIdle,
-            idleThresholdBytesPerSec = prefs[Keys.IDLE_THRESHOLD_BYTES] ?: defaults.idleThresholdBytesPerSec
+            idleThresholdBytesPerSec = prefs[Keys.IDLE_THRESHOLD_BYTES] ?: defaults.idleThresholdBytesPerSec,
+            freePosition = prefs[Keys.FREE_POSITION] ?: defaults.freePosition,
+            posXDp = prefs[Keys.POS_X_DP] ?: defaults.posXDp,
+            posYDp = prefs[Keys.POS_Y_DP] ?: defaults.posYDp
         )
     }
 
     suspend fun setHorizontalPosition(value: HorizontalPosition) = edit { it[Keys.HORIZONTAL_POSITION] = value.name }
     suspend fun setVerticalOffsetDp(value: Int) = edit { it[Keys.VERTICAL_OFFSET_DP] = value }
     suspend fun setDisplayMode(value: DisplayMode) = edit { it[Keys.DISPLAY_MODE] = value.name }
+    suspend fun setLineSpacingDp(value: Int) = edit { it[Keys.LINE_SPACING_DP] = value }
     suspend fun setIconStyle(value: IconStyle) = edit { it[Keys.ICON_STYLE] = value.name }
     suspend fun setFontSizeSp(value: Int) = edit { it[Keys.FONT_SIZE_SP] = value }
     suspend fun setBold(value: Boolean) = edit { it[Keys.BOLD] = value }
@@ -66,6 +75,11 @@ class SettingsRepository(private val context: Context) {
     suspend fun setUpdateIntervalMs(value: Long) = edit { it[Keys.UPDATE_INTERVAL_MS] = value }
     suspend fun setDimWhenIdle(value: Boolean) = edit { it[Keys.DIM_WHEN_IDLE] = value }
     suspend fun setIdleThresholdBytesPerSec(value: Long) = edit { it[Keys.IDLE_THRESHOLD_BYTES] = value }
+    suspend fun setFreePosition(value: Boolean) = edit { it[Keys.FREE_POSITION] = value }
+    suspend fun setPosition(xDp: Int, yDp: Int) = edit {
+        it[Keys.POS_X_DP] = xDp
+        it[Keys.POS_Y_DP] = yDp
+    }
 
     private suspend fun edit(block: (MutablePreferences) -> Unit) {
         context.dataStore.edit(block)
