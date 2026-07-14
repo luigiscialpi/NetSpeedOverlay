@@ -18,6 +18,11 @@ data class OverlaySettings(
 
     val horizontalPosition: HorizontalPosition = HorizontalPosition.RIGHT,
     val verticalAnchor: VerticalAnchor = VerticalAnchor.TOP,
+    // Solo per verticalAnchor = BOTTOM: posizione orizzontale in % della
+    // larghezza dello schermo (0 = bordo sinistro, 100 = bordo destro);
+    // l'overlay viene centrato su quel punto, così può stare ovunque nella
+    // barra di navigazione (es. tra due tasti).
+    val bottomHorizontalOffsetPct: Int = 50,
     val verticalOffsetDp: Int = 4,
     val displayMode: DisplayMode = DisplayMode.STACKED,
     val lineSpacingDp: Int = 0, // spazio tra le due righe in modalità "Due righe"

@@ -164,14 +164,25 @@ fun SettingsScreen(
                 Text("Riporta in posizione raggiungibile")
             }
         } else {
-            ChoiceRow(HorizontalPosition.entries, settings.horizontalPosition, { it.label() }) {
-                scope.launch { settingsRepository.setHorizontalPosition(it) }
+            if (settings.verticalAnchor == VerticalAnchor.BOTTOM) {
+                SliderSetting(
+                    "Posizione orizzontale (sotto)",
+                    settings.bottomHorizontalOffsetPct,
+                    0..100,
+                    { "$it %" }
+                ) {
+                    scope.launch { settingsRepository.setBottomHorizontalOffsetPct(it) }
+                }
+            } else {
+                ChoiceRow(HorizontalPosition.entries, settings.horizontalPosition, { it.label() }) {
+                    scope.launch { settingsRepository.setHorizontalPosition(it) }
+                }
             }
             ChoiceRow(VerticalAnchor.entries, settings.verticalAnchor, { it.label() }) {
                 scope.launch { settingsRepository.setVerticalAnchor(it) }
             }
             val offsetLabel = if (settings.verticalAnchor == VerticalAnchor.BOTTOM) {
-                "Distanza dal bordo inferiore"
+                "Distanza dal fondo schermo"
             } else {
                 "Distanza dal bordo superiore"
             }
@@ -180,9 +191,9 @@ fun SettingsScreen(
             }
             if (settings.verticalAnchor == VerticalAnchor.BOTTOM) {
                 Text(
-                    "Sotto la status bar, sopra la barra di navigazione. Con la " +
-                        "navigazione a 3 tasti i tasti sono centrati: con \"Sinistra\" " +
-                        "l'indicatore capita circa a lato del gruppo di tasti.",
+                    "Sotto/interno alla barra di navigazione. Lo slider orizzontale " +
+                        "sposta l'overlay su tutta la larghezza: i tasti sono centrati, " +
+                        "quindi 50% capita circa tra home e recenti.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }

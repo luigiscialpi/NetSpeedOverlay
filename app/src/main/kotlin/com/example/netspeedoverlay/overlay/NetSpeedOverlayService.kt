@@ -409,17 +409,29 @@ class NetSpeedOverlayService : LifecycleService() {
             params.y = dp(settings.posYDp)
             params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         } else {
-            val hGravity = when (settings.horizontalPosition) {
-                HorizontalPosition.LEFT -> Gravity.START
-                HorizontalPosition.CENTER -> Gravity.CENTER_HORIZONTAL
-                HorizontalPosition.RIGHT -> Gravity.END
-            }
             val vGravity = when (settings.verticalAnchor) {
                 VerticalAnchor.TOP -> Gravity.TOP
                 VerticalAnchor.BOTTOM -> Gravity.BOTTOM
             }
-            params.gravity = vGravity or hGravity
-            params.x = 0
+            params.gravity = if (settings.verticalAnchor == VerticalAnchor.BOTTOM) {
+                // Positioned by an absolute horizontal percentage, so anchor
+                // to the start edge and offset x manually.
+                vGravity or Gravity.START
+            } else {
+                vGravity or when (settings.horizontalPosition) {
+                    HorizontalPosition.LEFT -> Gravity.START
+                    HorizontalPosition.CENTER -> Gravity.CENTER_HORIZONTAL
+                    HorizontalPosition.RIGHT -> Gravity.END
+                }
+            }
+            params.x = if (settings.verticalAnchor == VerticalAnchor.BOTTOM) {
+                val screenW = resources.displayMetrics.widthPixels
+                val viewW = overlayRoot?.width?.takeIf { it > 0 } ?: dp(120)
+                ((screenW * settings.bottomHorizontalOffsetPct / 100) - viewW / 2)
+                    .coerceIn(0, (screenW - viewW).coerceAtLeast(0))
+            } else {
+                0
+            }
             // Anchored to the bottom: with these window flags the BOTTOM
             // gravity sits at the TOP of the navigation bar, so subtract the
             // bar height to push the indicator down INTO the bar (its bottom
