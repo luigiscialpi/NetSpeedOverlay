@@ -24,6 +24,7 @@ class SettingsRepository(private val context: Context) {
     private object Keys {
         val INDICATOR_MODE = stringPreferencesKey("indicator_mode")
         val HORIZONTAL_POSITION = stringPreferencesKey("horizontal_position")
+        val VERTICAL_ANCHOR = stringPreferencesKey("vertical_anchor")
         val VERTICAL_OFFSET_DP = intPreferencesKey("vertical_offset_dp")
         val DISPLAY_MODE = stringPreferencesKey("display_mode")
         val LINE_SPACING_DP = intPreferencesKey("line_spacing_dp")
@@ -54,6 +55,9 @@ class SettingsRepository(private val context: Context) {
             horizontalPosition = prefs[Keys.HORIZONTAL_POSITION]
                 ?.let { runCatching { HorizontalPosition.valueOf(it) }.getOrNull() }
                 ?: defaults.horizontalPosition,
+            verticalAnchor = prefs[Keys.VERTICAL_ANCHOR]
+                ?.let { runCatching { VerticalAnchor.valueOf(it) }.getOrNull() }
+                ?: defaults.verticalAnchor,
             verticalOffsetDp = prefs[Keys.VERTICAL_OFFSET_DP] ?: defaults.verticalOffsetDp,
             displayMode = prefs[Keys.DISPLAY_MODE]
                 ?.let { runCatching { DisplayMode.valueOf(it) }.getOrNull() }
@@ -86,6 +90,7 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setIndicatorMode(value: IndicatorMode) = edit { it[Keys.INDICATOR_MODE] = value.name }
     suspend fun setHorizontalPosition(value: HorizontalPosition) = edit { it[Keys.HORIZONTAL_POSITION] = value.name }
+    suspend fun setVerticalAnchor(value: VerticalAnchor) = edit { it[Keys.VERTICAL_ANCHOR] = value.name }
     suspend fun setVerticalOffsetDp(value: Int) = edit { it[Keys.VERTICAL_OFFSET_DP] = value }
     suspend fun setDisplayMode(value: DisplayMode) = edit { it[Keys.DISPLAY_MODE] = value.name }
     suspend fun setLineSpacingDp(value: Int) = edit { it[Keys.LINE_SPACING_DP] = value }

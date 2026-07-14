@@ -39,6 +39,7 @@ import com.example.netspeedoverlay.data.IconStyle
 import com.example.netspeedoverlay.data.IndicatorMode
 import com.example.netspeedoverlay.data.NotificationMetric
 import com.example.netspeedoverlay.data.OverlaySettings
+import com.example.netspeedoverlay.data.VerticalAnchor
 import com.example.netspeedoverlay.data.SettingsRepository
 import com.example.netspeedoverlay.speed.SpeedSampler
 import kotlinx.coroutines.Job
@@ -361,6 +362,14 @@ class NetSpeedOverlayService : LifecycleService() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
+    /** Height of the system navigation bar in px. 0 when there is no on-screen
+     * bar (gesture navigation). Used only to position the overlay *inside* the
+     * bar when anchored to the bottom. */
+    private fun getNavigationBarHeight(): Int {
+        val id = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        return if (id > 0) resources.getDimensionPixelSize(id) else 0
+    }
+
     // ---------------------------------------------------------------
     // Settings -> layout/style
     // ---------------------------------------------------------------
@@ -400,13 +409,26 @@ class NetSpeedOverlayService : LifecycleService() {
             params.y = dp(settings.posYDp)
             params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         } else {
-            params.gravity = when (settings.horizontalPosition) {
-                HorizontalPosition.LEFT -> Gravity.TOP or Gravity.START
-                HorizontalPosition.CENTER -> Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                HorizontalPosition.RIGHT -> Gravity.TOP or Gravity.END
+            val hGravity = when (settings.horizontalPosition) {
+                HorizontalPosition.LEFT -> Gravity.START
+                HorizontalPosition.CENTER -> Gravity.CENTER_HORIZONTAL
+                HorizontalPosition.RIGHT -> Gravity.END
             }
+            val vGravity = when (settings.verticalAnchor) {
+                VerticalAnchor.TOP -> Gravity.TOP
+                VerticalAnchor.BOTTOM -> Gravity.BOTTOM
+            }
+            params.gravity = vGravity or hGravity
             params.x = 0
-            params.y = dp(settings.verticalOffsetDp)
+            // Anchored to the bottom: with these window flags the BOTTOM
+            // gravity sits at the TOP of the navigation bar, so subtract the
+            // bar height to push the indicator down INTO the bar (its bottom
+            // edge ends up `verticalOffsetDp` px above the screen bottom).
+            params.y = if (settings.verticalAnchor == VerticalAnchor.BOTTOM) {
+                dp(settings.verticalOffsetDp) - getNavigationBarHeight()
+            } else {
+                dp(settings.verticalOffsetDp)
+            }
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         }
         runCatching { windowManager.updateViewLayout(root, params) }

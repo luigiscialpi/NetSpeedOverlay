@@ -17,6 +17,7 @@ data class OverlaySettings(
     val indicatorMode: IndicatorMode = IndicatorMode.OVERLAY,
 
     val horizontalPosition: HorizontalPosition = HorizontalPosition.RIGHT,
+    val verticalAnchor: VerticalAnchor = VerticalAnchor.TOP,
     val verticalOffsetDp: Int = 4,
     val displayMode: DisplayMode = DisplayMode.STACKED,
     val lineSpacingDp: Int = 0, // spazio tra le due righe in modalità "Due righe"
@@ -58,6 +59,7 @@ data class OverlaySettings(
 
 enum class IndicatorMode { OVERLAY, NOTIFICATION_ICON }
 enum class HorizontalPosition { LEFT, CENTER, RIGHT }
+enum class VerticalAnchor { TOP, BOTTOM }
 enum class DisplayMode { STACKED, INLINE }
 enum class IconStyle { NONE, ARROWS, LETTERS }
 enum class NotificationMetric { DOWNLOAD, UPLOAD, COMBINED }

@@ -44,6 +44,7 @@ import com.example.netspeedoverlay.data.IndicatorMode
 import com.example.netspeedoverlay.data.NotificationMetric
 import com.example.netspeedoverlay.data.OverlaySettings
 import com.example.netspeedoverlay.data.SettingsRepository
+import com.example.netspeedoverlay.data.VerticalAnchor
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -166,8 +167,24 @@ fun SettingsScreen(
             ChoiceRow(HorizontalPosition.entries, settings.horizontalPosition, { it.label() }) {
                 scope.launch { settingsRepository.setHorizontalPosition(it) }
             }
-            SliderSetting("Distanza dal bordo superiore", settings.verticalOffsetDp, 0..24, { "$it dp" }) {
+            ChoiceRow(VerticalAnchor.entries, settings.verticalAnchor, { it.label() }) {
+                scope.launch { settingsRepository.setVerticalAnchor(it) }
+            }
+            val offsetLabel = if (settings.verticalAnchor == VerticalAnchor.BOTTOM) {
+                "Distanza dal bordo inferiore"
+            } else {
+                "Distanza dal bordo superiore"
+            }
+            SliderSetting(offsetLabel, settings.verticalOffsetDp, 0..24, { "$it dp" }) {
                 scope.launch { settingsRepository.setVerticalOffsetDp(it) }
+            }
+            if (settings.verticalAnchor == VerticalAnchor.BOTTOM) {
+                Text(
+                    "Sotto la status bar, sopra la barra di navigazione. Con la " +
+                        "navigazione a 3 tasti i tasti sono centrati: con \"Sinistra\" " +
+                        "l'indicatore capita circa a lato del gruppo di tasti.",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
         }
 
@@ -358,6 +375,11 @@ private fun HorizontalPosition.label() = when (this) {
     HorizontalPosition.LEFT -> "Sinistra"
     HorizontalPosition.CENTER -> "Centro"
     HorizontalPosition.RIGHT -> "Destra"
+}
+
+private fun VerticalAnchor.label() = when (this) {
+    VerticalAnchor.TOP -> "Sopra"
+    VerticalAnchor.BOTTOM -> "Sotto"
 }
 
 private fun DisplayMode.label() = when (this) {
