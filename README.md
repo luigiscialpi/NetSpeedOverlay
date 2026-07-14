@@ -51,6 +51,20 @@ Opzioni esposte quando la modalità a due righe è attiva:
 In questa modalità la scelta "Cosa mostrare" (singolo valore) viene ignorata,
 perché vengono disegnati sia download che upload.
 
+#### Nota Xiaomi/MIUI (status bar)
+
+Su Xiaomi/Redmi/POCO (MIUI/HyperOS) la status bar **sostituisce l'icona
+personalizzata della notifica con l'icona dell'app**: è un comportamento di
+sistema, non un bug dell'app, e non è controllabile dal codice (l'impostazione
+"Usa le icone app per le notifiche" in *Impostazioni → Notifiche e barra di
+stato* è globale, non per-app, e non ha API pubbliche). Su Android stock /
+One UI (es. Galaxy) l'icona con i numeri viene invece mostrata normalmente.
+
+Per ovviare: l'app mostra i valori anche come **testo della notifica** (visibile
+aprendo la tendina, su qualunque dispositivo) e, sui dispositivi rilevati come
+Xiaomi/MIUI, una nota in-app che spiega come attivare i numeri anche in status
+bar (disattivando l'opzione di sistema sopra citata).
+
 ## Struttura
 
 ```

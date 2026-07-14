@@ -33,7 +33,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import android.os.Build
+import com.example.netspeedoverlay.R
 import com.example.netspeedoverlay.data.DisplayMode
 import com.example.netspeedoverlay.data.HorizontalPosition
 import com.example.netspeedoverlay.data.IconStyle
@@ -81,6 +84,12 @@ fun SettingsScreen(
                     "icone la decide il sistema, non tu.",
                 style = MaterialTheme.typography.bodySmall
             )
+            if (isXiaomiMiui()) {
+                Text(
+                    stringResource(R.string.miui_icon_warning),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
 
         val needsOverlayPermission = settings.indicatorMode == IndicatorMode.OVERLAY && !hasOverlayPermission
@@ -360,4 +369,21 @@ private fun IconStyle.label() = when (this) {
     IconStyle.NONE -> "Nessuna"
     IconStyle.ARROWS -> "Frecce"
     IconStyle.LETTERS -> "Lettere"
+}
+
+/** Detects Xiaomi/Redmi/POCO devices (MIUI/HyperOS), where the status bar
+ * replaces the custom notification small icon with the app icon. */
+private fun isXiaomiMiui(): Boolean {
+    val manufacturer = Build.MANUFACTURER?.lowercase() ?: ""
+    if (manufacturer == "xiaomi" || manufacturer == "redmi" || manufacturer == "poco") {
+        return true
+    }
+    return try {
+        val prop = Runtime.getRuntime()
+            .exec("getprop ro.miui.ui.version.name")
+            .inputStream.bufferedReader().readLine()
+        !prop.isNullOrBlank()
+    } catch (_: Exception) {
+        false
+    }
 }

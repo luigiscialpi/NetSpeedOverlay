@@ -2,4 +2,6 @@
     <string name="app_name">Net Speed Overlay</string>
     <string name="notification_channel_name">Indicatore velocità di rete</string>
     <string name="notification_title">Overlay attivo</string>
+    <string name="notification_content_running">Indicatore attivo</string>
+    <string name="miui_icon_warning">Su Xiaomi/MIUI la status bar mostra l\'icona dell\'app invece dei numeri. Per vederli, disattiva \"Usa le icone app per le notifiche\" in Impostazioni → Notifiche e barra di stato (è un\'impostazione globale di sistema, non per-app). I valori restano comunque visibili qui nella notifica, aprendo la tendina.</string>
 </resources>

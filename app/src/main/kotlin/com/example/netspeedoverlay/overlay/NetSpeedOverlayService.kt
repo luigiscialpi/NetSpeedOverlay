@@ -119,7 +119,10 @@ class NetSpeedOverlayService : LifecycleService() {
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
 
-        val notification = buildNotification(IconCompat.createWithResource(this, R.drawable.ic_speed_notification))
+        val notification = buildNotification(
+            IconCompat.createWithResource(this, R.drawable.ic_speed_notification),
+            getString(R.string.notification_content_running)
+        )
 
         // Android 14+ (API 34) requires every foreground service to declare
         // a type. There's no built-in type for "small overlay widget", so
@@ -135,20 +138,26 @@ class NetSpeedOverlayService : LifecycleService() {
     }
 
     /** Shared by the initial startForeground() call and every icon refresh in NOTIFICATION_ICON mode. */
-    private fun buildNotification(icon: IconCompat): Notification {
-        val openAppIntent = PendingIntent.getActivity(
+    private fun buildNotification(icon: IconCompat, contentText: String? = null): Notification {
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(getString(R.string.notification_title))
+            .setSmallIcon(icon)
+            .setContentIntent(openAppIntent())
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+        if (contentText != null) {
+            builder.setContentText(contentText)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
+        }
+        return builder.build()
+    }
+
+    private fun openAppIntent(): PendingIntent =
+        PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE
         )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.notification_title))
-            .setSmallIcon(icon)
-            .setContentIntent(openAppIntent)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .build()
-    }
 
     /**
      * Redraws the ongoing notification's small icon with the current speed,
@@ -161,25 +170,30 @@ class NetSpeedOverlayService : LifecycleService() {
         ) {
             return
         }
-        val lines = if (settings.notificationTwoLines) {
+        val (lines, contentText) = if (settings.notificationTwoLines) {
             // Two stacked rows: upload on top, download below. The "Cosa
             // mostrare" metric is ignored because both values are drawn.
-            listOf(
-                iconFor(settings.iconStyle, isDownload = false) +
-                    SpeedSampler.formatCompact(sample.txBytesPerSec),
-                iconFor(settings.iconStyle, isDownload = true) +
-                    SpeedSampler.formatCompact(sample.rxBytesPerSec)
-            )
+            val down = iconFor(settings.iconStyle, isDownload = true) +
+                SpeedSampler.format(sample.rxBytesPerSec, true)
+            val up = iconFor(settings.iconStyle, isDownload = false) +
+                SpeedSampler.format(sample.txBytesPerSec, true)
+            listOf(up, down) to "$down   $up"
         } else {
             val value = when (settings.notificationMetric) {
                 NotificationMetric.DOWNLOAD -> sample.rxBytesPerSec
                 NotificationMetric.UPLOAD -> sample.txBytesPerSec
                 NotificationMetric.COMBINED -> sample.rxBytesPerSec + sample.txBytesPerSec
             }
-            listOf(SpeedSampler.formatCompact(value))
+            val prefix = when (settings.notificationMetric) {
+                NotificationMetric.DOWNLOAD -> iconFor(settings.iconStyle, isDownload = true)
+                NotificationMetric.UPLOAD -> iconFor(settings.iconStyle, isDownload = false)
+                NotificationMetric.COMBINED -> ""
+            }
+            val text = "$prefix${SpeedSampler.format(value, true)}"
+            listOf(SpeedSampler.formatCompact(value)) to text
         }
         val icon = IconCompat.createWithBitmap(renderIconBitmap(lines, settings.notificationLineSpacing))
-        NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification(icon))
+        NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification(icon, contentText))
     }
 
     /**
