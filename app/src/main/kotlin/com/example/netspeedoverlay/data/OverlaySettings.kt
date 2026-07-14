@@ -43,7 +43,17 @@ data class OverlaySettings(
 
     // Solo per indicatorMode = NOTIFICATION_ICON: quale valore disegnare,
     // dato che non c'è spazio per mostrarli entrambi come nell'overlay.
-    val notificationMetric: NotificationMetric = NotificationMetric.COMBINED
+    val notificationMetric: NotificationMetric = NotificationMetric.COMBINED,
+
+    // Solo per NOTIFICATION_ICON: se true, l'icona disegna due righe
+    // (download in alto, upload in basso) invece di un solo valore. La
+    // scelta "Cosa mostrare" viene ignorata. I caratteri sono più piccoli
+    // perché il sistema ridimensiona l'icona a pochi dp nella status bar.
+    val notificationTwoLines: Boolean = false,
+
+    // Solo per NOTIFICATION_ICON a due righe: spaziatura verticale (in px
+    // sulla bitmap 96x96 dell'icona) tra la riga download e quella upload.
+    val notificationLineSpacing: Int = 0
 )
 
 enum class IndicatorMode { OVERLAY, NOTIFICATION_ICON }

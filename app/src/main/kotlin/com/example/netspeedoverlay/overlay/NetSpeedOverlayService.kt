@@ -161,12 +161,24 @@ class NetSpeedOverlayService : LifecycleService() {
         ) {
             return
         }
-        val value = when (settings.notificationMetric) {
-            NotificationMetric.DOWNLOAD -> sample.rxBytesPerSec
-            NotificationMetric.UPLOAD -> sample.txBytesPerSec
-            NotificationMetric.COMBINED -> sample.rxBytesPerSec + sample.txBytesPerSec
+        val lines = if (settings.notificationTwoLines) {
+            // Two stacked rows: upload on top, download below. The "Cosa
+            // mostrare" metric is ignored because both values are drawn.
+            listOf(
+                iconFor(settings.iconStyle, isDownload = false) +
+                    SpeedSampler.formatCompact(sample.txBytesPerSec),
+                iconFor(settings.iconStyle, isDownload = true) +
+                    SpeedSampler.formatCompact(sample.rxBytesPerSec)
+            )
+        } else {
+            val value = when (settings.notificationMetric) {
+                NotificationMetric.DOWNLOAD -> sample.rxBytesPerSec
+                NotificationMetric.UPLOAD -> sample.txBytesPerSec
+                NotificationMetric.COMBINED -> sample.rxBytesPerSec + sample.txBytesPerSec
+            }
+            listOf(SpeedSampler.formatCompact(value))
         }
-        val icon = IconCompat.createWithBitmap(renderIconBitmap(SpeedSampler.formatCompact(value)))
+        val icon = IconCompat.createWithBitmap(renderIconBitmap(lines, settings.notificationLineSpacing))
         NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification(icon))
     }
 
@@ -175,25 +187,44 @@ class NetSpeedOverlayService : LifecycleService() {
      * recolors based on the alpha channel), so this only needs opaque white
      * text on a transparent canvas — the actual on-screen tint is decided
      * by the OS/theme, not by this bitmap.
+     *
+     * Accepts one or more lines; with several lines the font shrinks so each
+     * row still fits inside the icon. The system then downscales the icon to
+     * a few dp in the status bar, so multi-line stays deliberately small.
      */
-    private fun renderIconBitmap(text: String): Bitmap {
+    private fun renderIconBitmap(lines: List<String>, lineSpacingPx: Int): Bitmap {
         val size = 96
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
+        val maxChars = lines.maxOfOrNull { it.length } ?: 0
+        val band = (size - (lines.size - 1) * lineSpacingPx) / lines.size.toFloat()
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textAlign = Paint.Align.CENTER
             typeface = Typeface.DEFAULT_BOLD
-            textSize = when (text.length) {
-                0, 1 -> size * 0.75f
-                2 -> size * 0.62f
-                3 -> size * 0.52f
-                else -> size * 0.42f
-            }
+            textSize = iconTextSize(size, band, maxChars, lines.size)
         }
-        val y = size / 2f - (paint.descent() + paint.ascent()) / 2f
-        canvas.drawText(text, size / 2f, y, paint)
+        lines.forEachIndexed { index, text ->
+            val centerY = band / 2f + index * (band + lineSpacingPx)
+            val baseline = centerY - (paint.descent() + paint.ascent()) / 2f
+            canvas.drawText(text, size / 2f, baseline, paint)
+        }
         return bitmap
+    }
+
+    /** Font size that fits both the widest line (width, measured against the
+     * full icon width [size]) and the available per-line height ([band], which
+     * already accounts for spacing), so stacked rows don't overlap. */
+    private fun iconTextSize(size: Int, band: Float, maxChars: Int, lineCount: Int): Float {
+        val widthBased = when (maxChars) {
+            0, 1 -> size * 0.75f
+            2 -> size * 0.62f
+            3 -> size * 0.52f
+            4 -> size * 0.42f
+            else -> size * 0.34f
+        }
+        val heightBased = band * 0.82f
+        return if (widthBased < heightBased) widthBased else heightBased
     }
 
     // ---------------------------------------------------------------

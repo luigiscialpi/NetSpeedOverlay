@@ -28,7 +28,28 @@ impostazioni:
   il sistema la forza monocromatica quindi zero problemi di contrasto.
   Il costo: ~3-4 caratteri al massimo (`SpeedSampler.formatCompact`), un
   solo valore alla volta (download, upload o combinato — non entrambi come
-  nell'overlay) e la posizione nel vassoio la decide il sistema, non l'app.
+   nell'overlay) e la posizione nel vassoio la decide il sistema, non l'app.
+
+### Icona notifica a due righe
+
+Opzione della modalità "Icona notifica" che disegna **due righe** dentro
+all'icona: **upload in alto, download in basso** (l'ordine è invertito
+rispetto all'overlay, dove il download sta sopra). Mostra entrambi i valori
+contemporaneamente, a costo di caratteri più piccoli: il sistema ridimensiona
+l'icona a pochi dp nella status bar, quindi lo spazio è comunque ridotto e la
+leggibilità resta limitata (utile soprattutto per un controllo rapido, non per
+leggere cifre precise).
+
+Opzioni esposte quando la modalità a due righe è attiva:
+
+- **Stile icona** — nessuna / frecce (↑↓) / lettere (U/D), lo stesso set
+  condiviso con l'overlay.
+- **Distanza tra le righe** — spaziatura verticale tra le due righe
+  (in px sulla bitmap 96×96 dell'icona). Allarga/stringe solo verticalmente,
+  non riduce la dimensione dei caratteri.
+
+In questa modalità la scelta "Cosa mostrare" (singolo valore) viene ignorata,
+perché vengono disegnati sia download che upload.
 
 ## Struttura
 

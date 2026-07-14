@@ -41,6 +41,8 @@ class SettingsRepository(private val context: Context) {
         val POS_X_DP = intPreferencesKey("pos_x_dp")
         val POS_Y_DP = intPreferencesKey("pos_y_dp")
         val NOTIFICATION_METRIC = stringPreferencesKey("notification_metric")
+        val NOTIFICATION_TWO_LINES = booleanPreferencesKey("notification_two_lines")
+        val NOTIFICATION_LINE_SPACING = intPreferencesKey("notification_line_spacing")
     }
 
     val settingsFlow: Flow<OverlaySettings> = context.dataStore.data.map { prefs ->
@@ -74,7 +76,11 @@ class SettingsRepository(private val context: Context) {
             posYDp = prefs[Keys.POS_Y_DP] ?: defaults.posYDp,
             notificationMetric = prefs[Keys.NOTIFICATION_METRIC]
                 ?.let { runCatching { NotificationMetric.valueOf(it) }.getOrNull() }
-                ?: defaults.notificationMetric
+                ?: defaults.notificationMetric,
+            notificationTwoLines = prefs[Keys.NOTIFICATION_TWO_LINES]
+                ?: defaults.notificationTwoLines,
+            notificationLineSpacing = prefs[Keys.NOTIFICATION_LINE_SPACING]
+                ?: defaults.notificationLineSpacing
         )
     }
 
@@ -99,6 +105,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setBackgroundColorArgb(value: Int) = edit { it[Keys.BACKGROUND_COLOR_ARGB] = value }
     suspend fun setShowBackground(value: Boolean) = edit { it[Keys.SHOW_BACKGROUND] = value }
     suspend fun setNotificationMetric(value: NotificationMetric) = edit { it[Keys.NOTIFICATION_METRIC] = value.name }
+    suspend fun setNotificationTwoLines(value: Boolean) = edit { it[Keys.NOTIFICATION_TWO_LINES] = value }
+    suspend fun setNotificationLineSpacing(value: Int) = edit { it[Keys.NOTIFICATION_LINE_SPACING] = value }
 
     private suspend fun edit(block: (MutablePreferences) -> Unit) {
         context.dataStore.edit(block)

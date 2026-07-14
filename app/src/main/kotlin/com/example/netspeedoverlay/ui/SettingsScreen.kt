@@ -107,6 +107,34 @@ fun SettingsScreen(
                     "né download e upload insieme, solo il valore scelto qui sopra.",
                 style = MaterialTheme.typography.bodySmall
             )
+            SwitchSetting("Icona a due righe (↑ download / ↓ upload)", settings.notificationTwoLines) {
+                scope.launch { settingsRepository.setNotificationTwoLines(it) }
+            }
+            if (settings.notificationTwoLines) {
+                Text(
+                    "Mostra download e upload su due righe invece di un solo valore: " +
+                        "la scelta \"Cosa mostrare\" qui sopra viene ignorata e i caratteri " +
+                        "sono più piccoli perché il sistema ridimensiona l'icona a pochi dp " +
+                        "nella status bar.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                SectionLabel("Stile due righe")
+                ChoiceRow(IconStyle.entries, settings.iconStyle, { it.label() }) {
+                    scope.launch { settingsRepository.setIconStyle(it) }
+                }
+                SliderSetting(
+                    "Distanza tra le righe",
+                    settings.notificationLineSpacing,
+                    -24..24,
+                    { "$it px" }
+                ) {
+                    scope.launch { settingsRepository.setNotificationLineSpacing(it) }
+                }
+                Text(
+                    "Stile e spaziatura valgono solo per l'icona a due righe.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
 
         if (settings.indicatorMode == IndicatorMode.OVERLAY) {
