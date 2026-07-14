@@ -11,6 +11,25 @@ altre app, quindi funziona su qualunque Android/OEM ma non è "dentro" la
 vera status bar. Nessun codice è stato copiato da CustoMIUIzer — solo
 l'elenco di funzionalità/impostazioni, riscritto da zero in Kotlin/Compose.
 
+## Due modalità
+
+Un vero hook sulla status bar reale (come fa CustoMIUIzer) richiede root:
+è un confine di sicurezza del sistema operativo, non un permesso aggirabile
+(vedi commit history / discussione per i dettagli). Ci sono però due modi
+non-root per mostrare il valore, entrambi selezionabili da "Modalità" nelle
+impostazioni:
+
+- **Overlay** — la finestra flottante descritta sopra: aspetto e
+  impostazioni completi (posizione libera o fissa, colori, formato, ecc.),
+  ma è tecnicamente sopra la status bar, non dentro.
+- **Icona notifica** — ridisegna l'icona della notifica persistente del
+  foreground service a ogni campionamento. Questa vive per davvero nella
+  status bar reale (non è un overlay): va nel vassoio icone di sistema,
+  il sistema la forza monocromatica quindi zero problemi di contrasto.
+  Il costo: ~3-4 caratteri al massimo (`SpeedSampler.formatCompact`), un
+  solo valore alla volta (download, upload o combinato — non entrambi come
+  nell'overlay) e la posizione nel vassoio la decide il sistema, non l'app.
+
 ## Struttura
 
 ```
@@ -22,7 +41,8 @@ app/src/main/kotlin/com/example/netspeedoverlay/
 ├── speed/
 │   └── SpeedSampler.kt          delta TrafficStats -> byte/sec, formattazione
 ├── overlay/
-│   └── NetSpeedOverlayService.kt  foreground service: WindowManager overlay
+│   └── NetSpeedOverlayService.kt  foreground service: overlay WindowManager
+│                                   o icona notifica, a seconda di indicatorMode
 └── ui/
     ├── SettingsScreen.kt        schermata impostazioni Compose
     └── theme/Theme.kt           tema Material3 minimale
@@ -73,12 +93,20 @@ basta un `Modifier`/`minWidth` sul TextView.
 ## Limitazioni note / prossimi passi
 
 - Il pulsante Avvia/Ferma in `SettingsScreen` tiene uno stato locale
-  (`overlayRunning`), non interroga il servizio reale — se il servizio viene
+  (`indicatorRunning`), non interroga il servizio reale — se il servizio viene
   ucciso dal sistema o l'app viene riaperta dopo un riavvio, il pulsante può
   disallinearsi. Soluzione naturale: esporre uno `StateFlow` dal service
   (es. tramite un `LocalBroadcastManager`-free binder, o più semplice, un
   singleton/`object` con `MutableStateFlow` osservato sia dal service che
   dalla UI).
-- Nessuna gestione di notch/cutout dello schermo: `verticalOffsetDp` è un
-  valore fisso, non legge `WindowInsets` per evitare l'area della fotocamera.
+- Nessuna gestione di notch/cutout dello schermo tramite `WindowInsets`
+  reali: `verticalOffsetDp` in modalità Overlay è un valore fisso scelto
+  dall'utente, non calcolato dall'altezza vera della status bar sul device.
+- Modalità "Icona notifica": aggiorna la notifica ad ogni campionamento
+  (default 1.5s). Nessun limite hard noto lato OS, ma è comunque un
+  aggiornamento più frequente del solito per una notifica — se noti consumo
+  batteria anomalo su un device specifico, alza l'intervallo. Storicamente
+  tecniche simili (icone di notifica come indicatore dati) si sono rotte a
+  vari giri di vite Android sulle restrizioni in background: se un giorno
+  smette di aggiornarsi su una versione futura, è il sospetto numero uno.
 - L'icona dell'app è un placeholder generato, non un design definitivo.

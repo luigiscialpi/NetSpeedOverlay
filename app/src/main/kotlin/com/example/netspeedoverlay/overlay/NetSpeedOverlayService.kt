@@ -1,12 +1,18 @@
 package com.example.netspeedoverlay.overlay
 
+import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.graphics.Typeface
@@ -19,7 +25,10 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.example.netspeedoverlay.MainActivity
@@ -27,6 +36,8 @@ import com.example.netspeedoverlay.R
 import com.example.netspeedoverlay.data.DisplayMode
 import com.example.netspeedoverlay.data.HorizontalPosition
 import com.example.netspeedoverlay.data.IconStyle
+import com.example.netspeedoverlay.data.IndicatorMode
+import com.example.netspeedoverlay.data.NotificationMetric
 import com.example.netspeedoverlay.data.OverlaySettings
 import com.example.netspeedoverlay.data.SettingsRepository
 import com.example.netspeedoverlay.speed.SpeedSampler
@@ -35,7 +46,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Foreground service that owns the floating network-speed indicator.
+ * Foreground service driving the network-speed indicator in one of two
+ * mutually exclusive modes, switchable at runtime from the settings screen:
+ *
+ * - [IndicatorMode.OVERLAY]: the floating [WindowManager] window (unchanged
+ *   behaviour below — drag, colors, spacing, etc).
+ * - [IndicatorMode.NOTIFICATION_ICON]: redraws the small icon of this
+ *   service's own ongoing notification on every sample. That one genuinely
+ *   lives in the real status bar (it's a real notification icon, not an
+ *   overlay), at the cost of fitting only ~3 compact characters and having
+ *   its position in the icon tray decided by the system, not us — see
+ *   README for why that trade-off exists.
  *
  * Deliberately uses plain [android.view.View]s for the overlay rather than
  * a ComposeView: a ComposeView hosted outside an Activity needs a manually
@@ -58,6 +79,7 @@ class NetSpeedOverlayService : LifecycleService() {
     private var layoutParams: WindowManager.LayoutParams? = null
 
     private var currentSettings: OverlaySettings = OverlaySettings()
+    private var lastKnownMode: IndicatorMode? = null
     private var samplingJob: Job? = null
 
     override fun onCreate() {
@@ -65,7 +87,9 @@ class NetSpeedOverlayService : LifecycleService() {
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         settingsRepository = SettingsRepository(applicationContext)
         startForegroundWithNotification()
-        addOverlayView()
+        // No unconditional addOverlayView() here anymore: the first emission
+        // from observeSettings() creates the overlay (or doesn't) depending
+        // on the persisted indicatorMode — see observeSettings().
         observeSettings()
         startSamplingLoop()
     }
@@ -86,29 +110,16 @@ class NetSpeedOverlayService : LifecycleService() {
     // ---------------------------------------------------------------
 
     private fun startForegroundWithNotification() {
-        val channelId = "net_speed_overlay"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                channelId,
+                CHANNEL_ID,
                 getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_MIN
             )
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
 
-        val openAppIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle(getString(R.string.notification_title))
-            .setSmallIcon(R.drawable.ic_speed_notification)
-            .setContentIntent(openAppIntent)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_MIN)
-            .build()
+        val notification = buildNotification(IconCompat.createWithResource(this, R.drawable.ic_speed_notification))
 
         // Android 14+ (API 34) requires every foreground service to declare
         // a type. There's no built-in type for "small overlay widget", so
@@ -120,7 +131,69 @@ class NetSpeedOverlayService : LifecycleService() {
         } else {
             0
         }
-        ServiceCompat.startForeground(this, 1, notification, fgsType)
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, fgsType)
+    }
+
+    /** Shared by the initial startForeground() call and every icon refresh in NOTIFICATION_ICON mode. */
+    private fun buildNotification(icon: IconCompat): Notification {
+        val openAppIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
+        )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(getString(R.string.notification_title))
+            .setSmallIcon(icon)
+            .setContentIntent(openAppIntent)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .build()
+    }
+
+    /**
+     * Redraws the ongoing notification's small icon with the current speed,
+     * which is what makes NOTIFICATION_ICON mode genuinely appear inside the
+     * real status bar instead of floating over it.
+     */
+    private fun updateNotificationIcon(sample: SpeedSampler.Sample, settings: OverlaySettings) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val value = when (settings.notificationMetric) {
+            NotificationMetric.DOWNLOAD -> sample.rxBytesPerSec
+            NotificationMetric.UPLOAD -> sample.txBytesPerSec
+            NotificationMetric.COMBINED -> sample.rxBytesPerSec + sample.txBytesPerSec
+        }
+        val icon = IconCompat.createWithBitmap(renderIconBitmap(SpeedSampler.formatCompact(value)))
+        NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification(icon))
+    }
+
+    /**
+     * Notification small icons are forced monochrome by the system (it
+     * recolors based on the alpha channel), so this only needs opaque white
+     * text on a transparent canvas — the actual on-screen tint is decided
+     * by the OS/theme, not by this bitmap.
+     */
+    private fun renderIconBitmap(text: String): Bitmap {
+        val size = 96
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            textSize = when (text.length) {
+                0, 1 -> size * 0.75f
+                2 -> size * 0.62f
+                3 -> size * 0.52f
+                else -> size * 0.42f
+            }
+        }
+        val y = size / 2f - (paint.descent() + paint.ascent()) / 2f
+        canvas.drawText(text, size / 2f, y, paint)
+        return bitmap
     }
 
     // ---------------------------------------------------------------
@@ -229,6 +302,16 @@ class NetSpeedOverlayService : LifecycleService() {
         }
     }
 
+    /** Tears the floating window down when switching to NOTIFICATION_ICON mode. */
+    private fun removeOverlayView() {
+        overlayRoot?.let { runCatching { windowManager.removeView(it) } }
+        overlayRoot = null
+        downloadText = null
+        uploadText = null
+        overlayBackground = null
+        layoutParams = null
+    }
+
     private fun pxToDp(px: Int): Int = (px / resources.displayMetrics.density).toInt()
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -241,7 +324,21 @@ class NetSpeedOverlayService : LifecycleService() {
         lifecycleScope.launch {
             settingsRepository.settingsFlow.collect { settings ->
                 currentSettings = settings
-                applySettingsToView(settings)
+
+                // lastKnownMode starts null, so this also runs on the very
+                // first emission — that's what creates (or skips) the
+                // overlay window at startup based on the persisted mode.
+                if (settings.indicatorMode != lastKnownMode) {
+                    lastKnownMode = settings.indicatorMode
+                    when (settings.indicatorMode) {
+                        IndicatorMode.OVERLAY -> if (overlayRoot == null) addOverlayView()
+                        IndicatorMode.NOTIFICATION_ICON -> removeOverlayView()
+                    }
+                }
+
+                if (settings.indicatorMode == IndicatorMode.OVERLAY) {
+                    applySettingsToView(settings)
+                }
             }
         }
     }
@@ -346,7 +443,12 @@ class NetSpeedOverlayService : LifecycleService() {
         samplingJob = lifecycleScope.launch {
             while (true) {
                 val settings = currentSettings
-                sampler.sample()?.let { updateTexts(it, settings) }
+                sampler.sample()?.let { sample ->
+                    when (settings.indicatorMode) {
+                        IndicatorMode.OVERLAY -> updateTexts(sample, settings)
+                        IndicatorMode.NOTIFICATION_ICON -> updateNotificationIcon(sample, settings)
+                    }
+                }
                 delay(settings.updateIntervalMs)
             }
         }
@@ -371,6 +473,9 @@ class NetSpeedOverlayService : LifecycleService() {
     }
 
     companion object {
+        private const val NOTIFICATION_ID = 1
+        private const val CHANNEL_ID = "net_speed_overlay"
+
         fun start(context: Context) {
             context.startForegroundService(Intent(context, NetSpeedOverlayService::class.java))
         }

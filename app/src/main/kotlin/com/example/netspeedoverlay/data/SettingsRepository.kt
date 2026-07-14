@@ -22,6 +22,7 @@ private val Context.dataStore by preferencesDataStore(name = "overlay_settings")
 class SettingsRepository(private val context: Context) {
 
     private object Keys {
+        val INDICATOR_MODE = stringPreferencesKey("indicator_mode")
         val HORIZONTAL_POSITION = stringPreferencesKey("horizontal_position")
         val VERTICAL_OFFSET_DP = intPreferencesKey("vertical_offset_dp")
         val DISPLAY_MODE = stringPreferencesKey("display_mode")
@@ -39,11 +40,15 @@ class SettingsRepository(private val context: Context) {
         val FREE_POSITION = booleanPreferencesKey("free_position")
         val POS_X_DP = intPreferencesKey("pos_x_dp")
         val POS_Y_DP = intPreferencesKey("pos_y_dp")
+        val NOTIFICATION_METRIC = stringPreferencesKey("notification_metric")
     }
 
     val settingsFlow: Flow<OverlaySettings> = context.dataStore.data.map { prefs ->
         val defaults = OverlaySettings()
         OverlaySettings(
+            indicatorMode = prefs[Keys.INDICATOR_MODE]
+                ?.let { runCatching { IndicatorMode.valueOf(it) }.getOrNull() }
+                ?: defaults.indicatorMode,
             horizontalPosition = prefs[Keys.HORIZONTAL_POSITION]
                 ?.let { runCatching { HorizontalPosition.valueOf(it) }.getOrNull() }
                 ?: defaults.horizontalPosition,
@@ -66,10 +71,14 @@ class SettingsRepository(private val context: Context) {
             showBackground = prefs[Keys.SHOW_BACKGROUND] ?: defaults.showBackground,
             freePosition = prefs[Keys.FREE_POSITION] ?: defaults.freePosition,
             posXDp = prefs[Keys.POS_X_DP] ?: defaults.posXDp,
-            posYDp = prefs[Keys.POS_Y_DP] ?: defaults.posYDp
+            posYDp = prefs[Keys.POS_Y_DP] ?: defaults.posYDp,
+            notificationMetric = prefs[Keys.NOTIFICATION_METRIC]
+                ?.let { runCatching { NotificationMetric.valueOf(it) }.getOrNull() }
+                ?: defaults.notificationMetric
         )
     }
 
+    suspend fun setIndicatorMode(value: IndicatorMode) = edit { it[Keys.INDICATOR_MODE] = value.name }
     suspend fun setHorizontalPosition(value: HorizontalPosition) = edit { it[Keys.HORIZONTAL_POSITION] = value.name }
     suspend fun setVerticalOffsetDp(value: Int) = edit { it[Keys.VERTICAL_OFFSET_DP] = value }
     suspend fun setDisplayMode(value: DisplayMode) = edit { it[Keys.DISPLAY_MODE] = value.name }
@@ -89,6 +98,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setTextColorArgb(value: Int) = edit { it[Keys.TEXT_COLOR_ARGB] = value }
     suspend fun setBackgroundColorArgb(value: Int) = edit { it[Keys.BACKGROUND_COLOR_ARGB] = value }
     suspend fun setShowBackground(value: Boolean) = edit { it[Keys.SHOW_BACKGROUND] = value }
+    suspend fun setNotificationMetric(value: NotificationMetric) = edit { it[Keys.NOTIFICATION_METRIC] = value.name }
 
     private suspend fun edit(block: (MutablePreferences) -> Unit) {
         context.dataStore.edit(block)

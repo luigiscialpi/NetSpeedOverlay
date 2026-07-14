@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import com.example.netspeedoverlay.data.DisplayMode
 import com.example.netspeedoverlay.data.HorizontalPosition
 import com.example.netspeedoverlay.data.IconStyle
+import com.example.netspeedoverlay.data.IndicatorMode
+import com.example.netspeedoverlay.data.NotificationMetric
 import com.example.netspeedoverlay.data.OverlaySettings
 import com.example.netspeedoverlay.data.SettingsRepository
 import kotlinx.coroutines.launch
@@ -57,7 +59,7 @@ fun SettingsScreen(
     // it doesn't query the real service state (e.g. after process death).
     // Fine for a first version; a StateFlow exposed by the service is the
     // natural next step if that gap matters to you.
-    var overlayRunning by remember { mutableStateOf(false) }
+    var indicatorRunning by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -68,18 +70,46 @@ fun SettingsScreen(
     ) {
         Text("Indicatore velocità di rete", style = MaterialTheme.typography.headlineSmall)
 
-        if (!hasOverlayPermission) {
+        SectionLabel("Modalità")
+        ChoiceRow(IndicatorMode.entries, settings.indicatorMode, { it.label() }) {
+            scope.launch { settingsRepository.setIndicatorMode(it) }
+        }
+        if (settings.indicatorMode == IndicatorMode.NOTIFICATION_ICON) {
+            Text(
+                "L'icona della notifica vive per davvero nella status bar, non è un overlay. " +
+                    "In cambio ha spazio per pochi caratteri e la sua posizione nel vassoio " +
+                    "icone la decide il sistema, non tu.",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        val needsOverlayPermission = settings.indicatorMode == IndicatorMode.OVERLAY && !hasOverlayPermission
+        if (needsOverlayPermission) {
             PermissionCard(onRequestOverlayPermission)
         } else {
             Button(onClick = {
-                overlayRunning = !overlayRunning
-                if (overlayRunning) onStartOverlay() else onStopOverlay()
+                indicatorRunning = !indicatorRunning
+                if (indicatorRunning) onStartOverlay() else onStopOverlay()
             }) {
-                Text(if (overlayRunning) "Ferma overlay" else "Avvia overlay")
+                Text(if (indicatorRunning) "Ferma indicatore" else "Avvia indicatore")
             }
         }
 
         HorizontalDivider()
+
+        if (settings.indicatorMode == IndicatorMode.NOTIFICATION_ICON) {
+            SectionLabel("Cosa mostrare")
+            ChoiceRow(NotificationMetric.entries, settings.notificationMetric, { it.label() }) {
+                scope.launch { settingsRepository.setNotificationMetric(it) }
+            }
+            Text(
+                "Spazio limitato a poche cifre (es. \"340K\", \"1.2M\"): niente unità \"/s\" " +
+                    "né download e upload insieme, solo il valore scelto qui sopra.",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        if (settings.indicatorMode == IndicatorMode.OVERLAY) {
 
         SectionLabel("Posizione")
         SwitchSetting("Posizione libera (trascina l'overlay)", settings.freePosition) {
@@ -152,6 +182,8 @@ fun SettingsScreen(
             scope.launch { settingsRepository.setBold(it) }
         }
 
+        } // fine sezioni esclusive di IndicatorMode.OVERLAY
+
         SectionLabel("Comportamento")
         SliderSetting(
             "Intervallo di aggiornamento",
@@ -161,6 +193,7 @@ fun SettingsScreen(
         ) {
             scope.launch { settingsRepository.setUpdateIntervalMs(it * 500L) }
         }
+        if (settings.indicatorMode == IndicatorMode.OVERLAY) {
         SwitchSetting("Attenua quando inattivo", settings.dimWhenIdle) {
             scope.launch { settingsRepository.setDimWhenIdle(it) }
         }
@@ -173,6 +206,7 @@ fun SettingsScreen(
             ) {
                 scope.launch { settingsRepository.setIdleThresholdBytesPerSec(it * 1024L) }
             }
+        }
         }
     }
 }
@@ -270,6 +304,17 @@ private fun <T> ChoiceRow(
             )
         }
     }
+}
+
+private fun IndicatorMode.label() = when (this) {
+    IndicatorMode.OVERLAY -> "Overlay"
+    IndicatorMode.NOTIFICATION_ICON -> "Icona notifica"
+}
+
+private fun NotificationMetric.label() = when (this) {
+    NotificationMetric.DOWNLOAD -> "Download"
+    NotificationMetric.UPLOAD -> "Upload"
+    NotificationMetric.COMBINED -> "Combinato"
 }
 
 private fun HorizontalPosition.label() = when (this) {

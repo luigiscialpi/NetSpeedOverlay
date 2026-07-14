@@ -59,5 +59,15 @@ class SpeedSampler {
                 else -> String.format("%.1f MB%s", bytesPerSec / (1024.0 * 1024.0), suffix)
             }
         }
+
+        /**
+         * Very short form for tight spaces like a notification icon: no
+         * unit suffix, single-letter scale (K/M), 3-4 characters max.
+         */
+        fun formatCompact(bytesPerSec: Long): String = when {
+            bytesPerSec < 1024 -> bytesPerSec.toString()
+            bytesPerSec < 1024 * 1024 -> "${bytesPerSec / 1024}K"
+            else -> String.format("%.1fM", bytesPerSec / (1024.0 * 1024.0))
+        }
     }
 }

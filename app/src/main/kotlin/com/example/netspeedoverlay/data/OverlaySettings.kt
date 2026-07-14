@@ -9,6 +9,13 @@ package com.example.netspeedoverlay.data
  * set it inspired.
  */
 data class OverlaySettings(
+    // Come mostrare il valore. OVERLAY è la finestra flottante esistente;
+    // NOTIFICATION_ICON ridisegna l'icona della notifica persistente a ogni
+    // campionamento — quella vive per davvero nella status bar (non è un
+    // overlay), a costo di poter mostrare solo 3-4 caratteri e non poter
+    // scegliere la sua posizione nel vassoio icone (decide il sistema).
+    val indicatorMode: IndicatorMode = IndicatorMode.OVERLAY,
+
     val horizontalPosition: HorizontalPosition = HorizontalPosition.RIGHT,
     val verticalOffsetDp: Int = 4,
     val displayMode: DisplayMode = DisplayMode.STACKED,
@@ -32,9 +39,15 @@ data class OverlaySettings(
     // viene salvata qui, ignorando horizontalPosition/verticalOffsetDp.
     val freePosition: Boolean = false,
     val posXDp: Int = 0,
-    val posYDp: Int = 0
+    val posYDp: Int = 0,
+
+    // Solo per indicatorMode = NOTIFICATION_ICON: quale valore disegnare,
+    // dato che non c'è spazio per mostrarli entrambi come nell'overlay.
+    val notificationMetric: NotificationMetric = NotificationMetric.COMBINED
 )
 
+enum class IndicatorMode { OVERLAY, NOTIFICATION_ICON }
 enum class HorizontalPosition { LEFT, CENTER, RIGHT }
 enum class DisplayMode { STACKED, INLINE }
 enum class IconStyle { NONE, ARROWS, LETTERS }
+enum class NotificationMetric { DOWNLOAD, UPLOAD, COMBINED }
