@@ -42,6 +42,7 @@ import com.example.netspeedoverlay.data.OverlaySettings
 import com.example.netspeedoverlay.data.VerticalAnchor
 import com.example.netspeedoverlay.data.SettingsRepository
 import com.example.netspeedoverlay.speed.SpeedSampler
+import com.example.netspeedoverlay.accessibility.SystemUiState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -93,6 +94,7 @@ class NetSpeedOverlayService : LifecycleService() {
         // on the persisted indicatorMode — see observeSettings().
         observeSettings()
         startSamplingLoop()
+        observeAccessibilityState()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -430,6 +432,27 @@ class NetSpeedOverlayService : LifecycleService() {
         }
     }
 
+    private fun observeAccessibilityState() {
+        lifecycleScope.launch {
+            SystemUiState.isForegroundAppDark.collect { _ ->
+                if (currentSettings.indicatorMode == IndicatorMode.OVERLAY && currentSettings.adaptToForegroundTheme) {
+                    applyOverlayColors(currentSettings)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            SystemUiState.isFullscreen.collect { isFullscreen ->
+                if (currentSettings.indicatorMode == IndicatorMode.OVERLAY) {
+                    overlayRoot?.visibility = if (currentSettings.hideInFullscreen && isFullscreen) {
+                        View.GONE
+                    } else {
+                        View.VISIBLE
+                    }
+                }
+            }
+        }
+    }
+
     private fun applySettingsToView(settings: OverlaySettings) {
         val params = layoutParams ?: return
         val root = overlayRoot ?: return
@@ -477,6 +500,12 @@ class NetSpeedOverlayService : LifecycleService() {
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         }
         runCatching { windowManager.updateViewLayout(root, params) }
+
+        root.visibility = if (settings.hideInFullscreen && SystemUiState.isFullscreen.value) {
+            View.GONE
+        } else {
+            View.VISIBLE
+        }
 
         root.orientation = if (settings.displayMode == DisplayMode.STACKED) {
             LinearLayout.VERTICAL
@@ -537,10 +566,21 @@ class NetSpeedOverlayService : LifecycleService() {
      * entrambi personalizzabili dall'utente.
      */
     private fun applyOverlayColors(settings: OverlaySettings) {
-        downloadText?.setTextColor(settings.textColorArgb)
-        uploadText?.setTextColor(settings.textColorArgb)
+        val (textColor, bgColor) = if (settings.adaptToForegroundTheme) {
+            val isDark = SystemUiState.isForegroundAppDark.value
+            if (isDark) {
+                0xFFFFFFFF.toInt() to 0xAA000000.toInt() // Testo bianco su sfondo scuro
+            } else {
+                0xFF000000.toInt() to 0xCCFFFFFF.toInt() // Testo nero su sfondo chiaro
+            }
+        } else {
+            settings.textColorArgb to settings.backgroundColorArgb
+        }
+
+        downloadText?.setTextColor(textColor)
+        uploadText?.setTextColor(textColor)
         if (settings.showBackground) {
-            overlayBackground?.setColor(settings.backgroundColorArgb)
+            overlayBackground?.setColor(bgColor)
             overlayRoot?.background = overlayBackground
         } else {
             overlayRoot?.background = null
