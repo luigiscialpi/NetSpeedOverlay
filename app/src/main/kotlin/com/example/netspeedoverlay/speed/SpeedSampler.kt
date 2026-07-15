@@ -53,15 +53,27 @@ class SpeedSampler {
         /** Auto-scales between B, KB and MB, one decimal once past KB. */
         fun format(bytesPerSec: Long, showPerSecondSuffix: Boolean, compactUnit: Boolean = false): String {
             val suffix = if (showPerSecondSuffix) "/s" else ""
+            val unit = if (compactUnit) "K" else "KB"
+            val mbUnit = if (compactUnit) "M" else "MB"
             return when {
-                bytesPerSec < 1024 -> "$bytesPerSec B$suffix"
+                bytesPerSec == 0L -> {
+                    val sep = if (compactUnit) "" else " "
+                    "0$sep$unit$suffix"
+                }
+                bytesPerSec < 1024 -> {
+                    val num = String.format("%.1f", bytesPerSec / 1024.0)
+                    val sep = if (compactUnit && num.length >= 3) "" else " "
+                    "$num$sep$unit$suffix"
+                }
                 bytesPerSec < 1024 * 1024 -> {
-                    val unit = if (compactUnit) "K" else "KB"
-                    String.format("%.0f %s%s", bytesPerSec / 1024.0, unit, suffix)
+                    val num = String.format("%.0f", bytesPerSec / 1024.0)
+                    val sep = if (compactUnit && num.length >= 3) "" else " "
+                    "$num$sep$unit$suffix"
                 }
                 else -> {
-                    val unit = if (compactUnit) "M" else "MB"
-                    String.format("%.1f %s%s", bytesPerSec / (1024.0 * 1024.0), unit, suffix)
+                    val num = String.format("%.1f", bytesPerSec / (1024.0 * 1024.0))
+                    val sep = if (compactUnit && num.length >= 3) "" else " "
+                    "$num$sep$mbUnit$suffix"
                 }
             }
         }
@@ -71,7 +83,8 @@ class SpeedSampler {
          * unit suffix, single-letter scale (K/M), 3-4 characters max.
          */
         fun formatCompact(bytesPerSec: Long): String = when {
-            bytesPerSec < 1024 -> bytesPerSec.toString()
+            bytesPerSec == 0L -> "0K"
+            bytesPerSec < 1024 -> String.format("%.1fK", bytesPerSec / 1024.0)
             bytesPerSec < 1024 * 1024 -> "${bytesPerSec / 1024}K"
             else -> String.format("%.1fM", bytesPerSec / (1024.0 * 1024.0))
         }

@@ -113,7 +113,7 @@ fun SettingsScreen(
                 scope.launch { settingsRepository.setNotificationMetric(it) }
             }
             Text(
-                "Spazio limitato a poche cifre (es. \"340K\", \"1.2M\"): niente unità \"/s\" " +
+                "Spazio limitato a poche cifre (es. \"0K\", \"0.2K\", \"12K\"): niente unità \"/s\" " +
                     "né download e upload insieme, solo il valore scelto qui sopra.",
                 style = MaterialTheme.typography.bodySmall
             )
