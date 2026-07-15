@@ -26,9 +26,11 @@ impostazioni:
   foreground service a ogni campionamento. Questa vive per davvero nella
   status bar reale (non è un overlay): va nel vassoio icone di sistema,
   il sistema la forza monocromatica quindi zero problemi di contrasto.
-  Il costo: ~3-4 caratteri al massimo (`SpeedSampler.formatCompact`), un
-  solo valore alla volta (download, upload o combinato — non entrambi come
-   nell'overlay) e la posizione nel vassoio la decide il sistema, non l'app.
+  Il costo: ~3-4 caratteri al massimo (valori formattati con
+  `SpeedSampler.formatCompact` nel testo della notifica, e
+  `SpeedSampler.format(..., compactUnit=true)` nell'icona), un solo valore
+  alla volta (download, upload o combinato — non entrambi come nell'overlay)
+  e la posizione nel vassoio la decide il sistema, non l'app.
 
 ### Icona notifica a due righe
 
@@ -40,16 +42,32 @@ l'icona a pochi dp nella status bar, quindi lo spazio è comunque ridotto e la
 leggibilità resta limitata (utile soprattutto per un controllo rapido, non per
 leggere cifre precise).
 
-Opzioni esposte quando la modalità a due righe è attiva:
+Opzioni esposte nella modalità "Icona notifica":
 
+- **Cosa mostrare** — download, upload o combinato (solo in modalità a una
+  riga; in due righe viene ignorato perché vengono mostrati entrambi).
+- **Icona a due righe** — attiva la modalità a due righe.
 - **Stile icona** — nessuna / frecce (↑↓) / lettere (U/D), lo stesso set
   condiviso con l'overlay.
+- **Dimensione caratteri icona** — percentuale di ridimensionamento del font
+  rispetto alla dimensione auto-calcolata (default 100%, range 50–150%).
+  Quando è attiva la gestione automatica (vedi sotto), questo slider è
+  disabilitato.
+- **Gestione automatica (auto-fit)** — quando attiva, il font parte da 150%
+  e viene automaticamente ridotto se il testo supera la larghezza
+  dell'icona (95% della bitmap 96×96) o l'altezza della riga. Inoltre,
+  per valori con 1–2 cifre intere (es. `12K`, `0K`) il font viene aumentato
+  del 20% per migliorare la leggibilità.
 - **Distanza tra le righe** — spaziatura verticale tra le due righe
   (in px sulla bitmap 96×96 dell'icona). Allarga/stringe solo verticalmente,
   non riduce la dimensione dei caratteri.
 
-In questa modalità la scelta "Cosa mostrare" (singolo valore) viene ignorata,
-perché vengono disegnati sia download che upload.
+#### Formattazione valori in modalità "Icona notifica"
+
+- Le unità sono compatte: `K` per kilobyte, `M` per megabyte.
+- Lo spazio tra numero e unità è rimosso quando la parte numerica ha 3 o più
+  caratteri (es. `12 K` → `12 K`, `173K` → `173K`, `1.2M` → `1.2M`).
+- Quando non c'è traffico (`0 B/s`) viene mostrato `0K`.
 
 #### Nota Xiaomi/MIUI (status bar)
 
@@ -107,9 +125,10 @@ invece per `SettingsScreen`, che gira in un'Activity normale.
 | `detailednetspeed_fakedualrow` (dualrow finto) vs riga singola | Formato: due righe / una riga | qui è un solo toggle, non due mutuamente esclusivi |
 | `detailednetspeed_icon` (stile icona direzione) | Stile icona (nessuna/frecce/lettere) | valori diversi, stesso ruolo |
 
-Non replicato: `fixedcontent_width` (larghezza fissa per evitare che il
-testo "salti" cambiando cifre) — facile da aggiungere se ti dà fastidio,
-basta un `Modifier`/`minWidth` sul TextView.
+Non replicato:
+- `fixedcontent_width` (larghezza fissa per evitare che il testo "salti" cambiando cifre) — facile da aggiungere se ti dà fastidio, basta un `Modifier`/`minWidth` sul TextView.
+- `notification_font_size_pct` — percentuale di ridimensionamento del font dell'icona notifica rispetto alla dimensione auto-calcolata.
+- `notification_auto_fit` — gestione automatica del font per adattarlo allo spazio disponibile, con boost del 20% per valori a 1-2 cifre senza punto/virgola.
 
 ## Setup
 

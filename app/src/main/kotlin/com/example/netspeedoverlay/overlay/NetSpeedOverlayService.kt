@@ -193,7 +193,7 @@ class NetSpeedOverlayService : LifecycleService() {
             val text = "$prefix${SpeedSampler.format(value, false, true)}"
             listOf(SpeedSampler.formatCompact(value)) to text
         }
-        val icon = IconCompat.createWithBitmap(renderIconBitmap(lines, settings.notificationLineSpacing, settings.notificationFontSizePct))
+        val icon = IconCompat.createWithBitmap(renderIconBitmap(lines, settings))
         NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification(icon, contentText))
     }
 
@@ -207,20 +207,52 @@ class NetSpeedOverlayService : LifecycleService() {
      * row still fits inside the icon. The system then downscales the icon to
      * a few dp in the status bar, so multi-line stays deliberately small.
      */
-    private fun renderIconBitmap(lines: List<String>, lineSpacingPx: Int, fontSizePct: Int): Bitmap {
+    private fun renderIconBitmap(lines: List<String>, settings: OverlaySettings): Bitmap {
         val size = 96
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val maxChars = lines.maxOfOrNull { it.length } ?: 0
-        val band = (size - (lines.size - 1) * lineSpacingPx) / lines.size.toFloat()
+        val band = (size - (lines.size - 1) * settings.notificationLineSpacing) / lines.size.toFloat()
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textAlign = Paint.Align.CENTER
             typeface = Typeface.DEFAULT_BOLD
-            textSize = iconTextSize(size, band, maxChars, lines.size, fontSizePct)
         }
         lines.forEachIndexed { index, text ->
-            val centerY = band / 2f + index * (band + lineSpacingPx)
+            val digitsCount = text.count { it.isDigit() }
+            val hasDotOrComma = text.contains('.') || text.contains(',')
+            val baseFontSizePct = if (settings.notificationAutoFit) 150 else settings.notificationFontSizePct
+            val applyDynamicBoost = !settings.notificationAutoFit && digitsCount in 1..2 && !hasDotOrComma
+            val lineFontSizePct = if (applyDynamicBoost) (baseFontSizePct * 1.2f).toInt() else baseFontSizePct
+
+            paint.textSize = iconTextSize(size, band, maxChars, lines.size, lineFontSizePct)
+
+            if (settings.notificationAutoFit) {
+                val maxHeight = band * 1.0f
+                if (paint.textSize > maxHeight) {
+                    paint.textSize = maxHeight
+                }
+            }
+
+            android.util.Log.d(
+                "NetSpeedOverlay",
+                "renderIconBitmap: line='$text', digits=$digitsCount, hasDotOrComma=$hasDotOrComma, boost=$applyDynamicBoost, sizeBeforeAutoFit=${paint.textSize}"
+            )
+
+            if (settings.notificationAutoFit) {
+                val maxWidth = size * 0.95f
+                val measuredWidth = paint.measureText(text)
+                if (measuredWidth > maxWidth) {
+                    val originalSize = paint.textSize
+                    paint.textSize = originalSize * (maxWidth / measuredWidth)
+                    android.util.Log.d(
+                        "NetSpeedOverlay",
+                        "renderIconBitmap autofit: line='$text', originalSize=$originalSize, newSize=${paint.textSize}, width=$measuredWidth, maxWidth=$maxWidth"
+                    )
+                }
+            }
+
+            val centerY = band / 2f + index * (band + settings.notificationLineSpacing)
             val baseline = centerY - (paint.descent() + paint.ascent()) / 2f
             canvas.drawText(text, size / 2f, baseline, paint)
         }
@@ -232,13 +264,13 @@ class NetSpeedOverlayService : LifecycleService() {
      * already accounts for spacing), so stacked rows don't overlap. */
     private fun iconTextSize(size: Int, band: Float, maxChars: Int, lineCount: Int, fontSizePct: Int): Float {
         val widthBased = when (maxChars) {
-            0, 1 -> size * 0.75f
-            2 -> size * 0.62f
-            3 -> size * 0.52f
-            4 -> size * 0.42f
-            else -> size * 0.34f
+            0, 1 -> size * 0.85f
+            2 -> size * 0.75f
+            3 -> size * 0.65f
+            4 -> size * 0.52f
+            else -> size * 0.40f
         }
-        val heightBased = band * 0.82f
+        val heightBased = band * 0.92f
         val base = if (widthBased < heightBased) widthBased else heightBased
         return base * (fontSizePct / 100f)
     }

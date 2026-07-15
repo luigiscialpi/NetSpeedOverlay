@@ -142,12 +142,15 @@ fun SettingsScreen(
                 }
             }
             SliderSetting(
-                "Dimensione caratteri icona",
-                settings.notificationFontSizePct,
-                50..150,
-                { "$it%" }
-            ) {
-                scope.launch { settingsRepository.setNotificationFontSizePct(it) }
+                label = "Dimensione caratteri icona",
+                value = settings.notificationFontSizePct,
+                range = 50..150,
+                valueLabel = { if (settings.notificationAutoFit) "Automatico" else "$it% (${(it * 1.2f).toInt()}% per 1-2 cifre senza punti)" },
+                onChange = { scope.launch { settingsRepository.setNotificationFontSizePct(it) } },
+                enabled = !settings.notificationAutoFit
+            )
+            SwitchSetting("Gestione automatica (auto-fit)", settings.notificationAutoFit) {
+                scope.launch { settingsRepository.setNotificationAutoFit(it) }
             }
         }
 
@@ -313,15 +316,18 @@ private fun SliderSetting(
     value: Int,
     range: IntRange,
     valueLabel: (Int) -> String,
+    enabled: Boolean = true,
     onChange: (Int) -> Unit
 ) {
+    val textColor = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
     Column {
-        Text("$label: ${valueLabel(value)}")
+        Text("$label: ${valueLabel(value)}", color = textColor)
         Slider(
             value = value.toFloat(),
             onValueChange = { onChange(it.toInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = (range.last - range.first - 1).coerceAtLeast(0)
+            steps = (range.last - range.first - 1).coerceAtLeast(0),
+            enabled = enabled
         )
     }
 }

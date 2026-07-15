@@ -63,7 +63,11 @@ data class OverlaySettings(
 
     // Solo per NOTIFICATION_ICON: percentuale di ridimensionamento del font
     // rispetto alla dimensione auto-calcolata (100 = default).
-    val notificationFontSizePct: Int = 100
+    val notificationFontSizePct: Int = 100,
+
+    // Solo per NOTIFICATION_ICON: se true, ridimensiona automaticamente il testo
+    // se supera lo spazio orizzontale dell'icona.
+    val notificationAutoFit: Boolean = true
 )
 
 enum class IndicatorMode { OVERLAY, NOTIFICATION_ICON }
