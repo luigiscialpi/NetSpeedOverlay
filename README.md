@@ -83,6 +83,18 @@ aprendo la tendina, su qualunque dispositivo) e, sui dispositivi rilevati come
 Xiaomi/MIUI, una nota in-app che spiega come attivare i numeri anche in status
 bar (disattivando l'opzione di sistema sopra citata).
 
+## Rilevamento a tutto schermo (Accessibility Service)
+
+Per sapere se l'app in primo piano è a schermo intero (es. video, giochi in
+modalità immersiva) l'app usa un `AccessibilityService` (`SystemBarAccessibilityService`):
+se non ci sono finestre di sistema di tipo `TYPE_SYSTEM` (status bar / nav bar),
+l'app in foreground è considerata a tutto schermo. L'overlay ne tiene conto per
+nascondersi quando non c'è una status bar "reale" su cui appoggiarsi.
+
+Richiede il permesso di accessibilità attivo sul servizio (da *Impostazioni →
+Accessibilità*): senza, il servizio non riceve gli eventi di finestra e il
+rilevamento non funziona.
+
 ## Struttura
 
 ```
@@ -93,6 +105,9 @@ app/src/main/kotlin/com/example/netspeedoverlay/
 │   └── SettingsRepository.kt    persistenza via DataStore, Flow reattivo
 ├── speed/
 │   └── SpeedSampler.kt          delta TrafficStats -> byte/sec, formattazione
+├── accessibility/
+│   ├── SystemBarAccessibilityService.kt  service: rileva stato a tutto schermo
+│   └── SystemUiState.kt         stato condiviso (fullscreen) tra service e overlay
 ├── overlay/
 │   └── NetSpeedOverlayService.kt  foreground service: overlay WindowManager
 │                                   o icona notifica, a seconda di indicatorMode
