@@ -1,11 +1,15 @@
 package com.example.netspeedoverlay
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Context
 import android.content.Intent
+import android.content.ComponentName
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,6 +18,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import com.example.netspeedoverlay.accessibility.SystemBarAccessibilityService
 import com.example.netspeedoverlay.data.SettingsRepository
 import com.example.netspeedoverlay.overlay.NetSpeedOverlayService
 import com.example.netspeedoverlay.ui.SettingsScreen
@@ -23,6 +28,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var settingsRepository: SettingsRepository
     private val hasOverlayPermission = mutableStateOf(false)
+    private val hasAccessibilityPermission = mutableStateOf(false)
 
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op: service still runs, the persistent notification just won't be visible if denied */ }
@@ -37,6 +43,7 @@ class MainActivity : ComponentActivity() {
         settingsRepository = SettingsRepository(applicationContext)
         requestNotificationPermissionIfNeeded()
         refreshOverlayPermissionState()
+        refreshAccessibilityPermissionState()
 
         setContent {
             NetSpeedOverlayTheme {
@@ -44,7 +51,9 @@ class MainActivity : ComponentActivity() {
                     SettingsScreen(
                         settingsRepository = settingsRepository,
                         hasOverlayPermission = hasOverlayPermission.value,
+                        hasAccessibilityPermission = hasAccessibilityPermission.value,
                         onRequestOverlayPermission = ::requestOverlayPermission,
+                        onRequestAccessibilityPermission = ::requestAccessibilityPermission,
                         onStartOverlay = { NetSpeedOverlayService.start(this) },
                         onStopOverlay = { NetSpeedOverlayService.stop(this) },
                         modifier = Modifier.safeDrawingPadding()
@@ -59,10 +68,20 @@ class MainActivity : ComponentActivity() {
         // Catches the case where the user grants the overlay permission and
         // returns via the back button rather than the launcher's callback.
         refreshOverlayPermissionState()
+        refreshAccessibilityPermissionState()
     }
 
     private fun refreshOverlayPermissionState() {
         hasOverlayPermission.value = NetSpeedOverlayService.canDrawOverlays(this)
+    }
+
+    private fun refreshAccessibilityPermissionState() {
+        val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+        val enabledServices = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_GENERIC)
+        hasAccessibilityPermission.value = enabledServices.any {
+            it.resolveInfo.serviceInfo.packageName == packageName &&
+            it.resolveInfo.serviceInfo.name == SystemBarAccessibilityService::class.java.name
+        }
     }
 
     private fun requestOverlayPermission() {
@@ -71,6 +90,11 @@ class MainActivity : ComponentActivity() {
             Uri.parse("package:$packageName")
         )
         overlayPermissionLauncher.launch(intent)
+    }
+
+    private fun requestAccessibilityPermission() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        startActivity(intent)
     }
 
     private fun requestNotificationPermissionIfNeeded() {

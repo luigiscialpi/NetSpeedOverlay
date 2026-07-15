@@ -434,16 +434,9 @@ class NetSpeedOverlayService : LifecycleService() {
 
     private fun observeAccessibilityState() {
         lifecycleScope.launch {
-            SystemUiState.isForegroundAppDark.collect { _ ->
-                if (currentSettings.indicatorMode == IndicatorMode.OVERLAY && currentSettings.adaptToForegroundTheme) {
-                    applyOverlayColors(currentSettings)
-                }
-            }
-        }
-        lifecycleScope.launch {
             SystemUiState.isFullscreen.collect { isFullscreen ->
                 if (currentSettings.indicatorMode == IndicatorMode.OVERLAY) {
-                    overlayRoot?.visibility = if (currentSettings.hideInFullscreen && isFullscreen) {
+                    overlayRoot?.visibility = if (isFullscreen) {
                         View.GONE
                     } else {
                         View.VISIBLE
@@ -501,7 +494,7 @@ class NetSpeedOverlayService : LifecycleService() {
         }
         runCatching { windowManager.updateViewLayout(root, params) }
 
-        root.visibility = if (settings.hideInFullscreen && SystemUiState.isFullscreen.value) {
+        root.visibility = if (SystemUiState.isFullscreen.value) {
             View.GONE
         } else {
             View.VISIBLE
@@ -566,21 +559,10 @@ class NetSpeedOverlayService : LifecycleService() {
      * entrambi personalizzabili dall'utente.
      */
     private fun applyOverlayColors(settings: OverlaySettings) {
-        val (textColor, bgColor) = if (settings.adaptToForegroundTheme) {
-            val isDark = SystemUiState.isForegroundAppDark.value
-            if (isDark) {
-                0xFFFFFFFF.toInt() to 0xAA000000.toInt() // Testo bianco su sfondo scuro
-            } else {
-                0xFF000000.toInt() to 0xCCFFFFFF.toInt() // Testo nero su sfondo chiaro
-            }
-        } else {
-            settings.textColorArgb to settings.backgroundColorArgb
-        }
-
-        downloadText?.setTextColor(textColor)
-        uploadText?.setTextColor(textColor)
+        downloadText?.setTextColor(settings.textColorArgb)
+        uploadText?.setTextColor(settings.textColorArgb)
         if (settings.showBackground) {
-            overlayBackground?.setColor(bgColor)
+            overlayBackground?.setColor(settings.backgroundColorArgb)
             overlayRoot?.background = overlayBackground
         } else {
             overlayRoot?.background = null
