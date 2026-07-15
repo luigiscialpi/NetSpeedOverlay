@@ -117,8 +117,12 @@ fun SettingsScreen(
                     "né download e upload insieme, solo il valore scelto qui sopra.",
                 style = MaterialTheme.typography.bodySmall
             )
-            SwitchSetting("Icona a due righe (↑ download / ↓ upload)", settings.notificationTwoLines) {
+            SwitchSetting("Icona a due righe (↑ upload / ↓ download)", settings.notificationTwoLines) {
                 scope.launch { settingsRepository.setNotificationTwoLines(it) }
+            }
+            SectionLabel("Stile icona")
+            ChoiceRow(IconStyle.entries, settings.iconStyle, { it.label() }) {
+                scope.launch { settingsRepository.setIconStyle(it) }
             }
             if (settings.notificationTwoLines) {
                 Text(
@@ -128,10 +132,6 @@ fun SettingsScreen(
                         "nella status bar.",
                     style = MaterialTheme.typography.bodySmall
                 )
-                SectionLabel("Stile due righe")
-                ChoiceRow(IconStyle.entries, settings.iconStyle, { it.label() }) {
-                    scope.launch { settingsRepository.setIconStyle(it) }
-                }
                 SliderSetting(
                     "Distanza tra le righe",
                     settings.notificationLineSpacing,
@@ -140,10 +140,14 @@ fun SettingsScreen(
                 ) {
                     scope.launch { settingsRepository.setNotificationLineSpacing(it) }
                 }
-                Text(
-                    "Stile e spaziatura valgono solo per l'icona a due righe.",
-                    style = MaterialTheme.typography.bodySmall
-                )
+            }
+            SliderSetting(
+                "Dimensione caratteri icona",
+                settings.notificationFontSizePct,
+                50..150,
+                { "$it%" }
+            ) {
+                scope.launch { settingsRepository.setNotificationFontSizePct(it) }
             }
         }
 

@@ -45,6 +45,7 @@ class SettingsRepository(private val context: Context) {
         val NOTIFICATION_METRIC = stringPreferencesKey("notification_metric")
         val NOTIFICATION_TWO_LINES = booleanPreferencesKey("notification_two_lines")
         val NOTIFICATION_LINE_SPACING = intPreferencesKey("notification_line_spacing")
+        val NOTIFICATION_FONT_SIZE_PCT = intPreferencesKey("notification_font_size_pct")
     }
 
     val settingsFlow: Flow<OverlaySettings> = context.dataStore.data.map { prefs ->
@@ -87,7 +88,9 @@ class SettingsRepository(private val context: Context) {
             notificationTwoLines = prefs[Keys.NOTIFICATION_TWO_LINES]
                 ?: defaults.notificationTwoLines,
             notificationLineSpacing = prefs[Keys.NOTIFICATION_LINE_SPACING]
-                ?: defaults.notificationLineSpacing
+                ?: defaults.notificationLineSpacing,
+            notificationFontSizePct = prefs[Keys.NOTIFICATION_FONT_SIZE_PCT]
+                ?: defaults.notificationFontSizePct
         )
     }
 
@@ -116,6 +119,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setNotificationMetric(value: NotificationMetric) = edit { it[Keys.NOTIFICATION_METRIC] = value.name }
     suspend fun setNotificationTwoLines(value: Boolean) = edit { it[Keys.NOTIFICATION_TWO_LINES] = value }
     suspend fun setNotificationLineSpacing(value: Int) = edit { it[Keys.NOTIFICATION_LINE_SPACING] = value }
+    suspend fun setNotificationFontSizePct(value: Int) = edit { it[Keys.NOTIFICATION_FONT_SIZE_PCT] = value }
 
     private suspend fun edit(block: (MutablePreferences) -> Unit) {
         context.dataStore.edit(block)

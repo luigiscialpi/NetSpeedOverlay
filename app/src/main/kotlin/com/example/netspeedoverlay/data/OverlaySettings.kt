@@ -59,7 +59,11 @@ data class OverlaySettings(
 
     // Solo per NOTIFICATION_ICON a due righe: spaziatura verticale (in px
     // sulla bitmap 96x96 dell'icona) tra la riga download e quella upload.
-    val notificationLineSpacing: Int = 0
+    val notificationLineSpacing: Int = 0,
+
+    // Solo per NOTIFICATION_ICON: percentuale di ridimensionamento del font
+    // rispetto alla dimensione auto-calcolata (100 = default).
+    val notificationFontSizePct: Int = 100
 )
 
 enum class IndicatorMode { OVERLAY, NOTIFICATION_ICON }

@@ -175,9 +175,9 @@ class NetSpeedOverlayService : LifecycleService() {
             // Two stacked rows: upload on top, download below. The "Cosa
             // mostrare" metric is ignored because both values are drawn.
             val down = iconFor(settings.iconStyle, isDownload = true) +
-                SpeedSampler.format(sample.rxBytesPerSec, true)
+                SpeedSampler.format(sample.rxBytesPerSec, false, true)
             val up = iconFor(settings.iconStyle, isDownload = false) +
-                SpeedSampler.format(sample.txBytesPerSec, true)
+                SpeedSampler.format(sample.txBytesPerSec, false, true)
             listOf(up, down) to "$down   $up"
         } else {
             val value = when (settings.notificationMetric) {
@@ -190,10 +190,10 @@ class NetSpeedOverlayService : LifecycleService() {
                 NotificationMetric.UPLOAD -> iconFor(settings.iconStyle, isDownload = false)
                 NotificationMetric.COMBINED -> ""
             }
-            val text = "$prefix${SpeedSampler.format(value, true)}"
+            val text = "$prefix${SpeedSampler.format(value, false, true)}"
             listOf(SpeedSampler.formatCompact(value)) to text
         }
-        val icon = IconCompat.createWithBitmap(renderIconBitmap(lines, settings.notificationLineSpacing))
+        val icon = IconCompat.createWithBitmap(renderIconBitmap(lines, settings.notificationLineSpacing, settings.notificationFontSizePct))
         NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification(icon, contentText))
     }
 
@@ -207,7 +207,7 @@ class NetSpeedOverlayService : LifecycleService() {
      * row still fits inside the icon. The system then downscales the icon to
      * a few dp in the status bar, so multi-line stays deliberately small.
      */
-    private fun renderIconBitmap(lines: List<String>, lineSpacingPx: Int): Bitmap {
+    private fun renderIconBitmap(lines: List<String>, lineSpacingPx: Int, fontSizePct: Int): Bitmap {
         val size = 96
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -217,7 +217,7 @@ class NetSpeedOverlayService : LifecycleService() {
             color = Color.WHITE
             textAlign = Paint.Align.CENTER
             typeface = Typeface.DEFAULT_BOLD
-            textSize = iconTextSize(size, band, maxChars, lines.size)
+            textSize = iconTextSize(size, band, maxChars, lines.size, fontSizePct)
         }
         lines.forEachIndexed { index, text ->
             val centerY = band / 2f + index * (band + lineSpacingPx)
@@ -230,7 +230,7 @@ class NetSpeedOverlayService : LifecycleService() {
     /** Font size that fits both the widest line (width, measured against the
      * full icon width [size]) and the available per-line height ([band], which
      * already accounts for spacing), so stacked rows don't overlap. */
-    private fun iconTextSize(size: Int, band: Float, maxChars: Int, lineCount: Int): Float {
+    private fun iconTextSize(size: Int, band: Float, maxChars: Int, lineCount: Int, fontSizePct: Int): Float {
         val widthBased = when (maxChars) {
             0, 1 -> size * 0.75f
             2 -> size * 0.62f
@@ -239,7 +239,8 @@ class NetSpeedOverlayService : LifecycleService() {
             else -> size * 0.34f
         }
         val heightBased = band * 0.82f
-        return if (widthBased < heightBased) widthBased else heightBased
+        val base = if (widthBased < heightBased) widthBased else heightBased
+        return base * (fontSizePct / 100f)
     }
 
     // ---------------------------------------------------------------

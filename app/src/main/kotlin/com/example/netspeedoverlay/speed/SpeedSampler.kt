@@ -51,12 +51,18 @@ class SpeedSampler {
 
     companion object {
         /** Auto-scales between B, KB and MB, one decimal once past KB. */
-        fun format(bytesPerSec: Long, showPerSecondSuffix: Boolean): String {
+        fun format(bytesPerSec: Long, showPerSecondSuffix: Boolean, compactUnit: Boolean = false): String {
             val suffix = if (showPerSecondSuffix) "/s" else ""
             return when {
                 bytesPerSec < 1024 -> "$bytesPerSec B$suffix"
-                bytesPerSec < 1024 * 1024 -> String.format("%.0f KB%s", bytesPerSec / 1024.0, suffix)
-                else -> String.format("%.1f MB%s", bytesPerSec / (1024.0 * 1024.0), suffix)
+                bytesPerSec < 1024 * 1024 -> {
+                    val unit = if (compactUnit) "K" else "KB"
+                    String.format("%.0f %s%s", bytesPerSec / 1024.0, unit, suffix)
+                }
+                else -> {
+                    val unit = if (compactUnit) "M" else "MB"
+                    String.format("%.1f %s%s", bytesPerSec / (1024.0 * 1024.0), unit, suffix)
+                }
             }
         }
 
