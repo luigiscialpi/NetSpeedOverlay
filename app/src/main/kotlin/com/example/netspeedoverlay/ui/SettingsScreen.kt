@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import android.os.Build
 import com.example.netspeedoverlay.R
 import com.example.netspeedoverlay.data.DisplayMode
-import com.example.netspeedoverlay.data.HorizontalPosition
 import com.example.netspeedoverlay.data.IconStyle
 import com.example.netspeedoverlay.data.IndicatorMode
 import com.example.netspeedoverlay.data.NotificationMetric
@@ -174,19 +173,13 @@ fun SettingsScreen(
                 Text("Riporta in posizione raggiungibile")
             }
         } else {
-            if (settings.verticalAnchor == VerticalAnchor.BOTTOM) {
-                SliderSetting(
-                    "Posizione orizzontale (sotto)",
-                    settings.bottomHorizontalOffsetPct,
-                    0..100,
-                    { "$it %" }
-                ) {
-                    scope.launch { settingsRepository.setBottomHorizontalOffsetPct(it) }
-                }
-            } else {
-                ChoiceRow(HorizontalPosition.entries, settings.horizontalPosition, { it.label() }) {
-                    scope.launch { settingsRepository.setHorizontalPosition(it) }
-                }
+            SliderSetting(
+                if (settings.verticalAnchor == VerticalAnchor.BOTTOM) "Posizione orizzontale (sotto)" else "Posizione orizzontale (sopra)",
+                settings.horizontalOffsetPct,
+                0..100,
+                { "$it %" }
+            ) {
+                scope.launch { settingsRepository.setHorizontalOffsetPct(it) }
             }
             ChoiceRow(VerticalAnchor.entries, settings.verticalAnchor, { it.label() }) {
                 scope.launch { settingsRepository.setVerticalAnchor(it) }
@@ -457,12 +450,6 @@ private fun NotificationMetric.label() = when (this) {
     NotificationMetric.DOWNLOAD -> "Download"
     NotificationMetric.UPLOAD -> "Upload"
     NotificationMetric.COMBINED -> "Combinato"
-}
-
-private fun HorizontalPosition.label() = when (this) {
-    HorizontalPosition.LEFT -> "Sinistra"
-    HorizontalPosition.CENTER -> "Centro"
-    HorizontalPosition.RIGHT -> "Destra"
 }
 
 private fun VerticalAnchor.label() = when (this) {

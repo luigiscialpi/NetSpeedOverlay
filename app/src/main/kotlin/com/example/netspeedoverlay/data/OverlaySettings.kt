@@ -16,13 +16,12 @@ data class OverlaySettings(
     // scegliere la sua posizione nel vassoio icone (decide il sistema).
     val indicatorMode: IndicatorMode = IndicatorMode.OVERLAY,
 
-    val horizontalPosition: HorizontalPosition = HorizontalPosition.RIGHT,
     val verticalAnchor: VerticalAnchor = VerticalAnchor.TOP,
-    // Solo per verticalAnchor = BOTTOM: posizione orizzontale in % della
-    // larghezza dello schermo (0 = bordo sinistro, 100 = bordo destro);
-    // l'overlay viene centrato su quel punto, così può stare ovunque nella
-    // barra di navigazione (es. tra due tasti).
-    val bottomHorizontalOffsetPct: Int = 35,
+    // Posizione orizzontale in % della larghezza dello schermo (0 = bordo
+    // sinistro, 100 = bordo destro), valida per entrambi gli anchor verticali
+    // — l'overlay viene centrato su quel punto, così può stare ovunque lungo
+    // il bordo superiore o quello inferiore (es. tra due tasti della nav bar).
+    val horizontalOffsetPct: Int = 35,
     val verticalOffsetDp: Int = 4,
     val displayMode: DisplayMode = DisplayMode.STACKED,
     val lineSpacingDp: Int = 0, // spazio tra le due righe in modalità "Due righe"
@@ -42,7 +41,7 @@ data class OverlaySettings(
     val showBackground: Boolean = true,
     // Posizionamento libero: se attivo, l'overlay può essere trascinato
     // ovunque sullo schermo e la posizione (in dp dall'angolo alto-sinistra)
-    // viene salvata qui, ignorando horizontalPosition/verticalOffsetDp.
+    // viene salvata qui, ignorando horizontalOffsetPct/verticalOffsetDp.
     val freePosition: Boolean = false,
     val posXDp: Int = 0,
     val posYDp: Int = 0,
@@ -71,7 +70,6 @@ data class OverlaySettings(
 )
 
 enum class IndicatorMode { OVERLAY, NOTIFICATION_ICON }
-enum class HorizontalPosition { LEFT, CENTER, RIGHT }
 enum class VerticalAnchor { TOP, BOTTOM }
 enum class DisplayMode { STACKED, INLINE }
 enum class IconStyle { NONE, ARROWS, LETTERS }
