@@ -5,10 +5,21 @@ import kotlin.math.max
 
 /**
  * Samples total device RX/TX bytes via [TrafficStats] — a public Android
- * API, no root and no special permission needed beyond normal internet
- * access — and turns two consecutive samples into a bytes/sec reading.
- * This is the same primitive CustoMIUIzer's hook reads from; the
- * difference is entirely in how the number gets drawn on screen.
+ * API, no root and no special permission needed — and turns two consecutive
+ * samples into a bytes/sec reading.
+ *
+ * NOTE ON TETHERING/HOTSPOT TRAFFIC:
+ * On Qualcomm-based devices, tethering/hotspot traffic is routed via
+ * "IPA" (Internet Protocol Accelerator) hardware offload. This hardware
+ * bypasses the CPU entirely, forwarding packets directly between the modem
+ * and the Wi-Fi chip. Consequently, this traffic is completely invisible to
+ * the CPU in real-time, and won't be counted by [TrafficStats] or /proc/net/dev.
+ *
+ * Disabling "Tethering hardware acceleration" in Developer Options allows the
+ * packets to pass through the network interfaces of the CPU, but due to how
+ * Android forwards packets at the IP/routing layer, they still bypass the
+ * local-socket level eBPF filters used by [TrafficStats], meaning they cannot
+ * be measured in real-time by this app on non-root devices.
  */
 class SpeedSampler {
 

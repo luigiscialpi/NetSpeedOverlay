@@ -66,6 +66,7 @@ fun SettingsScreen(
     // Fine for a first version; a StateFlow exposed by the service is the
     // natural next step if that gap matters to you.
     var indicatorRunning by remember { mutableStateOf(false) }
+    var showResetConfirm by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -300,6 +301,50 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+        }
+        
+        HorizontalDivider()
+        SectionLabel("Impostazioni")
+        if (showResetConfirm) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Ripristinare tutte le impostazioni ai valori predefiniti?",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            scope.launch {
+                                settingsRepository.resetSettings()
+                                showResetConfirm = false
+                            }
+                        }) { Text("Conferma") }
+                        Button(onClick = { showResetConfirm = false }) { Text("Annulla") }
+                    }
+                }
+            }
+        } else {
+            Button(onClick = { showResetConfirm = true }) {
+                Text("Reimposta impostazioni")
+            }
+        }
+
+        HorizontalDivider()
+        SectionLabel("Limitazioni note")
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Nota sul traffico Hotspot (Tethering):",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Text(
+                    "Il traffico Wi-Fi e dati mobile generato direttamente dal telefono viene misurato in tempo reale. " +
+                        "Tuttavia, il traffico dei dispositivi collegati al tuo Hotspot non può essere registrato a causa " +
+                        "di limitazioni di sicurezza di Android 10+ e dell'accelerazione hardware (Qualcomm IPA offload) " +
+                        "che instrada il traffico tethering al di fuori del kernel di sistema.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
     }

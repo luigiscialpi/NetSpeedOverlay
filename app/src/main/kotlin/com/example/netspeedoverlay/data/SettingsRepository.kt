@@ -125,6 +125,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setNotificationFontSizePct(value: Int) = edit { it[Keys.NOTIFICATION_FONT_SIZE_PCT] = value }
     suspend fun setNotificationAutoFit(value: Boolean) = edit { it[Keys.NOTIFICATION_AUTO_FIT] = value }
 
+    suspend fun resetSettings() = edit { it.clear() }
+
     private suspend fun edit(block: (MutablePreferences) -> Unit) {
         context.dataStore.edit(block)
     }
