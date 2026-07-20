@@ -21,6 +21,7 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -29,6 +30,8 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.IconCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.example.netspeedoverlay.MainActivity
@@ -79,9 +82,20 @@ class NetSpeedOverlayService : LifecycleService() {
     private var overlayBackground: GradientDrawable? = null
     private var layoutParams: WindowManager.LayoutParams? = null
 
+    // Stato "reale" delle barre di sistema, aggiornato da observeWindowInsets()
+    // ad ogni WindowInsets ricevuto sulla finestra overlay stessa: non
+    // richiede il permesso di accessibilità, a differenza di SystemUiState
+    // (che copre il caso più generale di un'app a tutto schermo senza alcuna
+    // finestra di sistema). navigationBarInsetPx sostituisce la stima basata
+    // sulla risorsa "navigation_bar_height" quando disponibile.
+    private var statusBarVisible: Boolean = true
+    private var navigationBarVisible: Boolean = true
+    private var navigationBarInsetPx: Int = 0
+
     private var currentSettings: OverlaySettings = OverlaySettings()
     private var lastKnownMode: IndicatorMode? = null
     private var samplingJob: Job? = null
+    private var insetsPollingJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -94,6 +108,7 @@ class NetSpeedOverlayService : LifecycleService() {
         observeSettings()
         startSamplingLoop()
         observeAccessibilityState()
+        startInsetsPollingLoop()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -103,6 +118,7 @@ class NetSpeedOverlayService : LifecycleService() {
 
     override fun onDestroy() {
         samplingJob?.cancel()
+        insetsPollingJob?.cancel()
         overlayRoot?.let { runCatching { windowManager.removeView(it) } }
         super.onDestroy()
     }
@@ -330,6 +346,33 @@ class NetSpeedOverlayService : LifecycleService() {
         layoutParams = params
 
         setupDragHandling(root)
+        observeWindowInsets(root)
+        observeContentWidthChanges(root)
+    }
+
+    /**
+     * La larghezza della view non è nota finché non avviene almeno un passo
+     * di layout, e nei primissimi passi può riflettere contenuto ancora vuoto
+     * (le TextView partono senza testo finché il campionamento non produce
+     * il primo valore, dopo updateIntervalMs): usare quella larghezza "acerba"
+     * (es. solo il padding, ~44px) per calcolare horizontalOffsetPct porta a
+     * una posizione sbagliata che poi restava bloccata per sempre con un
+     * listener one-shot, perché si disattivava dopo il primo layout anche se
+     * non era ancora quello definitivo. Questo listener invece resta attivo
+     * per tutta la vita della view e ricalcola la posizione ogni volta che la
+     * larghezza misurata cambia per davvero (non solo la prima volta che è
+     * > 0), così converge al valore corretto quando arriva il testo vero e si
+     * adatta anche a variazioni successive (es. cambio di cifre nel valore).
+     */
+    private fun observeContentWidthChanges(root: View) {
+        var lastWidthUsed = -1
+        root.viewTreeObserver.addOnGlobalLayoutListener {
+            val width = root.width
+            if (width > 0 && width != lastWidthUsed) {
+                lastWidthUsed = width
+                applySettingsToView(currentSettings)
+            }
+        }
     }
 
     /**
@@ -396,12 +439,107 @@ class NetSpeedOverlayService : LifecycleService() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
+    /**
+     * Controlla periodicamente lo stato delle barre, invece di fidarsi solo
+     * della dispatch "passiva" di WindowInsets (che scatta da sola quando il
+     * sistema decide di ricalcolare gli insets). Osservato sul campo che:
+     * - a volte la dispatch passiva non arriva quando un'altra app esce dal
+     *   fullscreen, lasciando l'overlay nascosto finché non cambiava
+     *   qualcos'altro (es. le impostazioni) a forzare un nuovo layout;
+     * - un semplice `requestApplyInsets()` non è sempre sufficiente a
+     *   sbloccare la situazione: la finestra overlay può restare "convinta"
+     *   che le barre siano nascoste anche minuti dopo essere tornati a
+     *   un'app normale con barre ben visibili.
+     * L'unica cosa che si è dimostrata sempre affidabile è una finestra
+     * appena creata (funziona sempre al primo addOverlayView() e ad ogni
+     * cambio modalità), quindi quando l'overlay risulta nascosto lo si
+     * ricrea da zero: operazione invisibile all'utente proprio perché in
+     * quel momento non è comunque mostrato. Quando invece è visibile ci si
+     * limita a un `requestApplyInsets()` leggero, per non causare flicker.
+     * Intervallo fisso di 1s, indipendente da updateIntervalMs (che riguarda
+     * solo quanto spesso si ricampiona la velocità di rete, non quanto
+     * reattivo deve essere il rilevamento delle barre).
+     */
+    private fun startInsetsPollingLoop() {
+        insetsPollingJob = lifecycleScope.launch {
+            while (true) {
+                delay(1000L)
+                val root = overlayRoot
+                if (currentSettings.indicatorMode == IndicatorMode.OVERLAY && root != null) {
+                    if (shouldHideOverlay(currentSettings)) {
+                        recreateOverlayView()
+                    } else {
+                        ViewCompat.requestApplyInsets(root)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Ricrea la finestra overlay da zero (rimuove e riaggiunge), usata da
+     * [startInsetsPollingLoop] per forzare uno stato di WindowInsets
+     * corretto quando l'overlay è nascosto. Vedi il commento lì per il
+     * perché non basta un semplice requestApplyInsets().
+     */
+    private fun recreateOverlayView() {
+        removeOverlayView()
+        addOverlayView()
+        applySettingsToView(currentSettings)
+    }
+
+    /**
+     * Registra un listener per i WindowInsets reali della finestra overlay:
+     * permette di sapere se status bar e nav bar sono *davvero visibili in
+     * questo momento* (es. un'altra app in primo piano è passata a schermo
+     * intero/immersivo) senza il permesso di accessibilità, e di leggere
+     * l'altezza vera della nav bar invece di stimarla da una risorsa.
+     * Vedi [shouldHideOverlay] e [getNavigationBarHeight].
+     */
+    private fun observeWindowInsets(root: View) {
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            val statusVisible = insets.isVisible(WindowInsetsCompat.Type.statusBars())
+            val navVisible = insets.isVisible(WindowInsetsCompat.Type.navigationBars())
+            val navHeightPx = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            val changed = statusVisible != statusBarVisible ||
+                navVisible != navigationBarVisible ||
+                navHeightPx != navigationBarInsetPx
+            statusBarVisible = statusVisible
+            navigationBarVisible = navVisible
+            navigationBarInsetPx = navHeightPx
+            if (changed) applySettingsToView(currentSettings)
+            insets
+        }
+    }
+
     /** Height of the system navigation bar in px. 0 when there is no on-screen
      * bar (gesture navigation). Used only to position the overlay *inside* the
-     * bar when anchored to the bottom. */
+     * bar when anchored to the bottom. Prefers the live WindowInsets value
+     * from [observeWindowInsets] and falls back to the resource-based guess
+     * only before the first insets dispatch. */
     private fun getNavigationBarHeight(): Int {
+        if (navigationBarInsetPx > 0) return navigationBarInsetPx
         val id = resources.getIdentifier("navigation_bar_height", "dimen", "android")
         return if (id > 0) resources.getDimensionPixelSize(id) else 0
+    }
+
+    /**
+     * True se l'overlay va nascosto: o perché l'AccessibilityService rileva
+     * un'app a tutto schermo (nessuna finestra di sistema), oppure perché la
+     * barra a cui l'overlay è ancorato in questo momento (status bar per
+     * TOP, nav bar per BOTTOM) risulta nascosta via WindowInsets reali — es.
+     * modalità immersiva di un'altra app in primo piano. I due segnali sono
+     * complementari: WindowInsets non richiede permessi ma sotto Android 11
+     * (API 30) è "un'approssimazione" (vedi WindowInsetsCompat.isVisible),
+     * mentre l'AccessibilityService copre anche i casi in cui gli insets non
+     * arrivano aggiornati.
+     */
+    private fun shouldHideOverlay(settings: OverlaySettings): Boolean {
+        val relevantBarVisible = when (settings.verticalAnchor) {
+            VerticalAnchor.TOP -> statusBarVisible
+            VerticalAnchor.BOTTOM -> navigationBarVisible
+        }
+        return SystemUiState.isFullscreen.value || !relevantBarVisible
     }
 
     // ---------------------------------------------------------------
@@ -433,10 +571,13 @@ class NetSpeedOverlayService : LifecycleService() {
 
     private fun observeAccessibilityState() {
         lifecycleScope.launch {
-            SystemUiState.isFullscreen.collect { isFullscreen ->
+            SystemUiState.isFullscreen.collect {
                 if (currentSettings.indicatorMode == IndicatorMode.OVERLAY) {
-                    overlayRoot?.visibility = if (isFullscreen) {
-                        View.GONE
+                    // INVISIBLE, non GONE: vedi il commento in applySettingsToView
+                    // sul perché (GONE interrompe la dispatch dei WindowInsets e
+                    // l'overlay resterebbe "sordo" per sempre una volta nascosto).
+                    overlayRoot?.visibility = if (shouldHideOverlay(currentSettings)) {
+                        View.INVISIBLE
                     } else {
                         View.VISIBLE
                     }
@@ -481,8 +622,17 @@ class NetSpeedOverlayService : LifecycleService() {
         }
         runCatching { windowManager.updateViewLayout(root, params) }
 
-        root.visibility = if (SystemUiState.isFullscreen.value) {
-            View.GONE
+        // INVISIBLE, non GONE: una View GONE viene esclusa dal passo di layout,
+        // e la dispatch di onApplyWindowInsets (vedi observeWindowInsets) passa
+        // proprio da quel passo. Con GONE, appena l'overlay si nasconde smette
+        // di ricevere nuovi WindowInsets e non si accorge più che le barre sono
+        // ricomparse — resta nascosto finché qualcos'altro (es. un cambio
+        // impostazioni, che chiama updateViewLayout sopra) non forza un nuovo
+        // dispatch. INVISIBLE mantiene dimensioni/posizione e continua a
+        // partecipare al layout, quindi continua a ricevere insets aggiornati
+        // anche da nascosto.
+        root.visibility = if (shouldHideOverlay(settings)) {
+            View.INVISIBLE
         } else {
             View.VISIBLE
         }

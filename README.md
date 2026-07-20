@@ -95,6 +95,42 @@ Richiede il permesso di accessibilità attivo sul servizio (da *Impostazioni →
 Accessibilità*): senza, il servizio non riceve gli eventi di finestra e il
 rilevamento non funziona.
 
+## Rilevamento delle barre di sistema tramite WindowInsets
+
+Oltre all'AccessibilityService sopra, `NetSpeedOverlayService` ascolta anche
+i `WindowInsets` reali della propria finestra overlay
+(`ViewCompat.setOnApplyWindowInsetsListener`, da AndroidX Core — già una
+dipendenza esistente, nessuna libreria aggiunta) per sapere se status bar e
+nav bar sono *davvero visibili in questo momento* —
+`WindowInsetsCompat.isVisible(Type.statusBars()/navigationBars())` — e per
+leggere l'altezza vera della nav bar (`getInsets(Type.navigationBars()).bottom`),
+al posto della vecchia stima basata sulla risorsa di sistema
+`navigation_bar_height`.
+
+A differenza dell'AccessibilityService questo non richiede alcun permesso
+speciale: gli insets vengono dispatchati a qualsiasi finestra, incluse quelle
+`TYPE_APPLICATION_OVERLAY`, perché riflettono lo stato reale e condiviso a
+livello di schermo delle barre di sistema, non solo le richieste della
+finestra che li legge (dalla doc ufficiale di `WindowInsetsCompat.isVisible`:
+*"regardless of whether it actually overlaps with this window"*). Per questo
+l'overlay si nasconde anche quando un'altra app in primo piano attiva la
+modalità immersiva, pure senza il permesso di accessibilità concesso.
+
+Sotto Android 11 (API 30) `isVisible()`/`getInsets()` sono però
+un'approssimazione, come dichiarato dalla stessa doc AndroidX per le API
+precedenti: per questo l'overlay si nasconde se **uno qualsiasi** dei due
+segnali (accessibilità o WindowInsets) indica una barra nascosta —
+`NetSpeedOverlayService.shouldHideOverlay()`. La compilazione è stata
+verificata (`./gradlew :app:compileDebugKotlin`), ma il comportamento a
+runtime va comunque verificato su device reali, in particolare su OEM con
+skin pesanti (MIUI/HyperOS, ColorOS, ecc.) dove insets e immersive mode sono
+storicamente meno standard.
+
+Resta un valore fisso, non calcolato da WindowInsets: `verticalOffsetDp`
+quando l'overlay è ancorato in alto (`VerticalAnchor.TOP`) non tiene conto
+dell'altezza reale della status bar — solo l'ancoraggio in basso usa
+l'altezza vera della nav bar. Nessuna gestione dedicata di notch/cutout.
+
 ## Struttura
 
 ```
@@ -168,9 +204,11 @@ Non replicato:
   (es. tramite un `LocalBroadcastManager`-free binder, o più semplice, un
   singleton/`object` con `MutableStateFlow` osservato sia dal service che
   dalla UI).
-- Nessuna gestione di notch/cutout dello schermo tramite `WindowInsets`
-  reali: `verticalOffsetDp` in modalità Overlay è un valore fisso scelto
-  dall'utente, non calcolato dall'altezza vera della status bar sul device.
+- `verticalOffsetDp` in modalità Overlay resta un valore fisso scelto
+  dall'utente quando ancorato in alto (`VerticalAnchor.TOP`): non è calcolato
+  dall'altezza reale della status bar. L'ancoraggio in basso invece usa già
+  l'altezza vera della nav bar via `WindowInsets` (vedi sezione dedicata più
+  sopra). Nessuna gestione dedicata di notch/cutout dello schermo.
 - Modalità "Icona notifica": aggiorna la notifica ad ogni campionamento
   (default 1.5s). Nessun limite hard noto lato OS, ma è comunque un
   aggiornamento più frequente del solito per una notifica — se noti consumo
