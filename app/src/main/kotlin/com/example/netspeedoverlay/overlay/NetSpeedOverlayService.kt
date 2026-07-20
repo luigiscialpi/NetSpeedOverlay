@@ -693,7 +693,10 @@ class NetSpeedOverlayService : LifecycleService() {
                 val settings = currentSettings
                 sampler.sample()?.let { sample ->
                     when (settings.indicatorMode) {
-                        IndicatorMode.OVERLAY -> updateTexts(sample, settings)
+                        IndicatorMode.OVERLAY -> {
+                            updateTexts(sample, settings)
+                            updateOverlayNotificationText(sample, settings)
+                        }
                         IndicatorMode.NOTIFICATION_ICON -> updateNotificationIcon(sample, settings)
                     }
                 }
@@ -718,6 +721,31 @@ class NetSpeedOverlayService : LifecycleService() {
         IconStyle.NONE -> ""
         IconStyle.ARROWS -> if (isDownload) "↓" else "↑"
         IconStyle.LETTERS -> if (isDownload) "D" else "U"
+    }
+
+    /**
+     * Aggiorna il testo della notifica persistente del foreground service
+     * (obbligatoria per restare in foreground, quindi comunque visibile) con
+     * i valori live di download/upload, anche in modalità Overlay. Su alcuni
+     * device (es. MIUI/HyperOS) questa notifica non è nascondibile/collassabile
+     * del tutto, quindi tanto vale mostrarci qualcosa di utile invece del testo
+     * statico "Indicatore attivo". L'icona resta quella statica dell'app: i
+     * numeri li mostra già l'overlay sullo schermo, non serve ridisegnarla
+     * come si fa in modalità NOTIFICATION_ICON (vedi [updateNotificationIcon]).
+     */
+    private fun updateOverlayNotificationText(sample: SpeedSampler.Sample, settings: OverlaySettings) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val down = iconFor(settings.iconStyle, isDownload = true) +
+            SpeedSampler.format(sample.rxBytesPerSec, settings.showPerSecondSuffix)
+        val up = iconFor(settings.iconStyle, isDownload = false) +
+            SpeedSampler.format(sample.txBytesPerSec, settings.showPerSecondSuffix)
+        val text = "$down   $up"
+        val icon = IconCompat.createWithResource(this, R.drawable.ic_speed_notification)
+        NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification(icon, text))
     }
 
     companion object {
