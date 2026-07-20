@@ -51,9 +51,7 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     settingsRepository: SettingsRepository,
     hasOverlayPermission: Boolean,
-    hasAccessibilityPermission: Boolean,
     onRequestOverlayPermission: () -> Unit,
-    onRequestAccessibilityPermission: () -> Unit,
     onStartOverlay: () -> Unit,
     onStopOverlay: () -> Unit,
     modifier: Modifier = Modifier
@@ -154,26 +152,6 @@ fun SettingsScreen(
             SwitchSetting("Gestione automatica (auto-fit)", settings.notificationAutoFit) {
                 scope.launch { settingsRepository.setNotificationAutoFit(it) }
             }
-        }
-
-        if (settings.indicatorMode == IndicatorMode.OVERLAY) {
-          SectionLabel("Nascondi Automaticamente")
-          if (hasAccessibilityPermission) {
-            Text("Nascondi in Fullscreen: Servizio di Accessibilità Attivo \u2705", style = MaterialTheme.typography.bodyMedium)
-          } else {
-            Card(modifier = Modifier.fillMaxWidth()) {
-              Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                  "Per nascondere automaticamente l'overlay quando apri un'app a schermo intero (video, giochi), abilita il servizio di accessibilità per l'app.",
-                  style = MaterialTheme.typography.bodyMedium
-                  )
-                  Button(onClick = onRequestAccessibilityPermission) {
-                    Text("Abilita in Impostazioni")
-                  }
-                }
-              }
-            }
-          HorizontalDivider()
         }
 
         if (settings.indicatorMode == IndicatorMode.OVERLAY) {

@@ -44,7 +44,6 @@ import com.example.netspeedoverlay.data.OverlaySettings
 import com.example.netspeedoverlay.data.VerticalAnchor
 import com.example.netspeedoverlay.data.SettingsRepository
 import com.example.netspeedoverlay.speed.SpeedSampler
-import com.example.netspeedoverlay.accessibility.SystemUiState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -83,11 +82,9 @@ class NetSpeedOverlayService : LifecycleService() {
     private var layoutParams: WindowManager.LayoutParams? = null
 
     // Stato "reale" delle barre di sistema, aggiornato da observeWindowInsets()
-    // ad ogni WindowInsets ricevuto sulla finestra overlay stessa: non
-    // richiede il permesso di accessibilità, a differenza di SystemUiState
-    // (che copre il caso più generale di un'app a tutto schermo senza alcuna
-    // finestra di sistema). navigationBarInsetPx sostituisce la stima basata
-    // sulla risorsa "navigation_bar_height" quando disponibile.
+    // ad ogni WindowInsets ricevuto sulla finestra overlay stessa.
+    // navigationBarInsetPx sostituisce la stima basata sulla risorsa
+    // "navigation_bar_height" quando disponibile.
     private var statusBarVisible: Boolean = true
     private var navigationBarVisible: Boolean = true
     private var navigationBarInsetPx: Int = 0
@@ -107,7 +104,6 @@ class NetSpeedOverlayService : LifecycleService() {
         // on the persisted indicatorMode — see observeSettings().
         observeSettings()
         startSamplingLoop()
-        observeAccessibilityState()
         startInsetsPollingLoop()
     }
 
@@ -492,8 +488,8 @@ class NetSpeedOverlayService : LifecycleService() {
      * Registra un listener per i WindowInsets reali della finestra overlay:
      * permette di sapere se status bar e nav bar sono *davvero visibili in
      * questo momento* (es. un'altra app in primo piano è passata a schermo
-     * intero/immersivo) senza il permesso di accessibilità, e di leggere
-     * l'altezza vera della nav bar invece di stimarla da una risorsa.
+     * intero/immersivo), senza bisogno di alcun permesso speciale, e di
+     * leggere l'altezza vera della nav bar invece di stimarla da una risorsa.
      * Vedi [shouldHideOverlay] e [getNavigationBarHeight].
      */
     private fun observeWindowInsets(root: View) {
@@ -524,22 +520,20 @@ class NetSpeedOverlayService : LifecycleService() {
     }
 
     /**
-     * True se l'overlay va nascosto: o perché l'AccessibilityService rileva
-     * un'app a tutto schermo (nessuna finestra di sistema), oppure perché la
-     * barra a cui l'overlay è ancorato in questo momento (status bar per
-     * TOP, nav bar per BOTTOM) risulta nascosta via WindowInsets reali — es.
-     * modalità immersiva di un'altra app in primo piano. I due segnali sono
-     * complementari: WindowInsets non richiede permessi ma sotto Android 11
-     * (API 30) è "un'approssimazione" (vedi WindowInsetsCompat.isVisible),
-     * mentre l'AccessibilityService copre anche i casi in cui gli insets non
-     * arrivano aggiornati.
+     * True se l'overlay va nascosto: la barra a cui è ancorato in questo
+     * momento (status bar per TOP, nav bar per BOTTOM) risulta nascosta via
+     * WindowInsets reali — es. modalità immersiva di un'altra app in primo
+     * piano. Non rileva il peek temporaneo delle barre (swipe-reveal): le
+     * barre "transient" si sovrappongono ai contenuti senza generare un
+     * nuovo dispatch di insets (confermato sul campo: isVisible() resta
+     * false per tutta la durata del peek) — limite noto, vedi README.
      */
     private fun shouldHideOverlay(settings: OverlaySettings): Boolean {
         val relevantBarVisible = when (settings.verticalAnchor) {
             VerticalAnchor.TOP -> statusBarVisible
             VerticalAnchor.BOTTOM -> navigationBarVisible
         }
-        return SystemUiState.isFullscreen.value || !relevantBarVisible
+        return !relevantBarVisible
     }
 
     // ---------------------------------------------------------------
@@ -564,23 +558,6 @@ class NetSpeedOverlayService : LifecycleService() {
 
                 if (settings.indicatorMode == IndicatorMode.OVERLAY) {
                     applySettingsToView(settings)
-                }
-            }
-        }
-    }
-
-    private fun observeAccessibilityState() {
-        lifecycleScope.launch {
-            SystemUiState.isFullscreen.collect {
-                if (currentSettings.indicatorMode == IndicatorMode.OVERLAY) {
-                    // INVISIBLE, non GONE: vedi il commento in applySettingsToView
-                    // sul perché (GONE interrompe la dispatch dei WindowInsets e
-                    // l'overlay resterebbe "sordo" per sempre una volta nascosto).
-                    overlayRoot?.visibility = if (shouldHideOverlay(currentSettings)) {
-                        View.INVISIBLE
-                    } else {
-                        View.VISIBLE
-                    }
                 }
             }
         }

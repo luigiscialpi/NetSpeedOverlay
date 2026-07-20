@@ -83,53 +83,45 @@ aprendo la tendina, su qualunque dispositivo) e, sui dispositivi rilevati come
 Xiaomi/MIUI, una nota in-app che spiega come attivare i numeri anche in status
 bar (disattivando l'opzione di sistema sopra citata).
 
-## Rilevamento a tutto schermo (Accessibility Service)
-
-Per sapere se l'app in primo piano è a schermo intero (es. video, giochi in
-modalità immersiva) l'app usa un `AccessibilityService` (`SystemBarAccessibilityService`):
-se non ci sono finestre di sistema di tipo `TYPE_SYSTEM` (status bar / nav bar),
-l'app in foreground è considerata a tutto schermo. L'overlay ne tiene conto per
-nascondersi quando non c'è una status bar "reale" su cui appoggiarsi.
-
-Richiede il permesso di accessibilità attivo sul servizio (da *Impostazioni →
-Accessibilità*): senza, il servizio non riceve gli eventi di finestra e il
-rilevamento non funziona.
-
 ## Rilevamento delle barre di sistema tramite WindowInsets
 
-Oltre all'AccessibilityService sopra, `NetSpeedOverlayService` ascolta anche
-i `WindowInsets` reali della propria finestra overlay
-(`ViewCompat.setOnApplyWindowInsetsListener`, da AndroidX Core — già una
-dipendenza esistente, nessuna libreria aggiunta) per sapere se status bar e
-nav bar sono *davvero visibili in questo momento* —
+`NetSpeedOverlayService` ascolta i `WindowInsets` reali della propria
+finestra overlay (`ViewCompat.setOnApplyWindowInsetsListener`, da AndroidX
+Core — già una dipendenza esistente, nessuna libreria aggiunta) per sapere
+se status bar e nav bar sono *davvero visibili in questo momento* —
 `WindowInsetsCompat.isVisible(Type.statusBars()/navigationBars())` — e per
 leggere l'altezza vera della nav bar (`getInsets(Type.navigationBars()).bottom`),
-al posto della vecchia stima basata sulla risorsa di sistema
-`navigation_bar_height`.
+al posto di una stima basata sulla risorsa di sistema `navigation_bar_height`.
+Non richiede alcun permesso speciale: gli insets vengono dispatchati a
+qualsiasi finestra, incluse quelle `TYPE_APPLICATION_OVERLAY`, perché
+riflettono lo stato reale e condiviso a livello di schermo delle barre di
+sistema (dalla doc ufficiale di `WindowInsetsCompat.isVisible`: *"regardless
+of whether it actually overlaps with this window"*). Per questo l'overlay
+si nasconde anche quando un'altra app in primo piano attiva la modalità
+immersiva.
 
-A differenza dell'AccessibilityService questo non richiede alcun permesso
-speciale: gli insets vengono dispatchati a qualsiasi finestra, incluse quelle
-`TYPE_APPLICATION_OVERLAY`, perché riflettono lo stato reale e condiviso a
-livello di schermo delle barre di sistema, non solo le richieste della
-finestra che li legge (dalla doc ufficiale di `WindowInsetsCompat.isVisible`:
-*"regardless of whether it actually overlaps with this window"*). Per questo
-l'overlay si nasconde anche quando un'altra app in primo piano attiva la
-modalità immersiva, pure senza il permesso di accessibilità concesso.
+La dispatch "passiva" di WindowInsets a volte non arriva da sola quando
+un'altra app esce dal fullscreen (osservato sul campo, in particolare
+tornando alla home con tasto Home invece che Indietro): `NetSpeedOverlayService`
+quindi ricontrolla lo stato ogni secondo (`startInsetsPollingLoop`) e, se
+l'overlay risulta nascosto, ricrea la finestra da zero — l'unica cosa che si
+è dimostrata sempre affidabile per ottenere lo stato corretto delle barre —
+invece di limitarsi a un `requestApplyInsets()` che non basta sempre a
+sbloccare la situazione.
 
-Sotto Android 11 (API 30) `isVisible()`/`getInsets()` sono però
-un'approssimazione, come dichiarato dalla stessa doc AndroidX per le API
-precedenti: per questo l'overlay si nasconde se **uno qualsiasi** dei due
-segnali (accessibilità o WindowInsets) indica una barra nascosta —
-`NetSpeedOverlayService.shouldHideOverlay()`. La compilazione è stata
-verificata (`./gradlew :app:compileDebugKotlin`), ma il comportamento a
-runtime va comunque verificato su device reali, in particolare su OEM con
-skin pesanti (MIUI/HyperOS, ColorOS, ecc.) dove insets e immersive mode sono
-storicamente meno standard.
-
-Resta un valore fisso, non calcolato da WindowInsets: `verticalOffsetDp`
-quando l'overlay è ancorato in alto (`VerticalAnchor.TOP`) non tiene conto
-dell'altezza reale della status bar — solo l'ancoraggio in basso usa
-l'altezza vera della nav bar. Nessuna gestione dedicata di notch/cutout.
+Limite noto: le barre mostrate *temporaneamente* con lo swipe in modalità
+immersiva ("peek"/transient reveal) non fanno riapparire l'overlay.
+Confermato sul campo che `WindowInsets.isVisible()` resta `false` per tutta
+la durata del peek: le barre transient si sovrappongono ai contenuti senza
+generare un nuovo dispatch di insets, quindi non c'è modo pubblico di
+rilevarle da una finestra diversa da quella dell'app in primo piano. Prima
+c'era un `AccessibilityService` dedicato a questo (rimosso): il suo segnale
+("esiste una finestra di tipo TYPE_SYSTEM?") si è rivelato inaffidabile —
+in alcuni casi (es. video fullscreen) restituiva risultati opposti a parità
+di scenario, probabilmente perché quella categoria include anche elementi
+di sistema non legati alle barre. Non valeva il costo (permesso extra,
+schermata di sistema poco rassicurante da concedere) per un guadagno così
+incerto.
 
 ## Struttura
 
@@ -141,9 +133,6 @@ app/src/main/kotlin/com/example/netspeedoverlay/
 │   └── SettingsRepository.kt    persistenza via DataStore, Flow reattivo
 ├── speed/
 │   └── SpeedSampler.kt          delta TrafficStats -> byte/sec, formattazione
-├── accessibility/
-│   ├── SystemBarAccessibilityService.kt  service: rileva stato a tutto schermo
-│   └── SystemUiState.kt         stato condiviso (fullscreen) tra service e overlay
 ├── overlay/
 │   └── NetSpeedOverlayService.kt  foreground service: overlay WindowManager
 │                                   o icona notifica, a seconda di indicatorMode
@@ -209,6 +198,11 @@ Non replicato:
   dall'altezza reale della status bar. L'ancoraggio in basso invece usa già
   l'altezza vera della nav bar via `WindowInsets` (vedi sezione dedicata più
   sopra). Nessuna gestione dedicata di notch/cutout dello schermo.
+- L'overlay non riappare durante lo swipe-reveal temporaneo delle barre in
+  modalità immersiva (vedi sezione "Rilevamento delle barre di sistema"):
+  limite delle API pubbliche di WindowInsets, non risolvibile senza un
+  meccanismo aggiuntivo (valutato e scartato l'uso di un AccessibilityService
+  dedicato, il cui segnale si è rivelato inaffidabile).
 - Modalità "Icona notifica": aggiorna la notifica ad ogni campionamento
   (default 1.5s). Nessun limite hard noto lato OS, ma è comunque un
   aggiornamento più frequente del solito per una notifica — se noti consumo
