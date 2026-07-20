@@ -90,12 +90,12 @@ class NetSpeedOverlayService : LifecycleService() {
     private var layoutParams: WindowManager.LayoutParams? = null
 
     // Stato "reale" delle barre di sistema, aggiornato da observeWindowInsets()
-    // ad ogni WindowInsets ricevuto sulla finestra overlay stessa.
-    // navigationBarInsetPx sostituisce la stima basata sulla risorsa
-    // "navigation_bar_height" quando disponibile.
+    // ad ogni WindowInsets ricevuto sulla finestra overlay stessa. Usato solo
+    // per mostra/nascondi (shouldHideOverlay) — NON per il posizionamento
+    // verticale, che usa sempre la risorsa di sistema (vedi getNavigationBarHeight).
     private var statusBarVisible: Boolean = true
     private var navigationBarVisible: Boolean = true
-    private var navigationBarInsetPx: Int = 0
+    private var insetsDebounceJob: Job? = null
 
     private var currentSettings: OverlaySettings = OverlaySettings()
     private var lastKnownMode: IndicatorMode? = null
@@ -498,33 +498,42 @@ class NetSpeedOverlayService : LifecycleService() {
      * Registra un listener per i WindowInsets reali della finestra overlay:
      * permette di sapere se status bar e nav bar sono *davvero visibili in
      * questo momento* (es. un'altra app in primo piano è passata a schermo
-     * intero/immersivo), senza bisogno di alcun permesso speciale, e di
-     * leggere l'altezza vera della nav bar invece di stimarla da una risorsa.
-     * Vedi [shouldHideOverlay] e [getNavigationBarHeight].
+     * intero/immersivo), senza bisogno di alcun permesso speciale.
+     * Vedi [shouldHideOverlay]. Nota: NON usiamo l'altezza reale della nav bar
+     * riportata dagli insets per il posizionamento verticale (vedi
+     * [getNavigationBarHeight]) — vedi il motivo lì.
      */
     private fun observeWindowInsets(root: View) {
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val statusVisible = insets.isVisible(WindowInsetsCompat.Type.statusBars())
             val navVisible = insets.isVisible(WindowInsetsCompat.Type.navigationBars())
-            val navHeightPx = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
-            val changed = statusVisible != statusBarVisible ||
-                navVisible != navigationBarVisible ||
-                navHeightPx != navigationBarInsetPx
+            val changed = statusVisible != statusBarVisible || navVisible != navigationBarVisible
             statusBarVisible = statusVisible
             navigationBarVisible = navVisible
-            navigationBarInsetPx = navHeightPx
-            if (changed) applySettingsToView(currentSettings)
+            if (changed) {
+                insetsDebounceJob?.cancel()
+                insetsDebounceJob = lifecycleScope.launch {
+                    delay(150L)
+                    applySettingsToView(currentSettings)
+                }
+            }
             insets
         }
     }
 
     /** Height of the system navigation bar in px. 0 when there is no on-screen
      * bar (gesture navigation). Used only to position the overlay *inside* the
-     * bar when anchored to the bottom. Prefers the live WindowInsets value
-     * from [observeWindowInsets] and falls back to the resource-based guess
-     * only before the first insets dispatch. */
+     * bar when anchored to the bottom. Sempre basata sulla risorsa di sistema
+     * "navigation_bar_height", MAI sul valore reale/live riportato da
+     * WindowInsets. Motivo (scoperto su Samsung/Android 16 con nav bar a 3
+     * pulsanti): il WindowManager calcola il frame di riferimento per una
+     * finestra gravity=BOTTOM (con FLAG_LAYOUT_NO_LIMITS) usando la SUA stima
+     * interna dell'altezza della nav bar — che coincide con questa risorsa,
+     * NON con l'altezza visiva effettiva riportata dagli insets (più piccola
+     * su alcuni OEM che restringono la barra solo esteticamente). Usare il
+     * valore "vero" da insets fa terminare l'overlay decine di px sopra il
+     * fondo reale dello schermo invece che a filo. */
     private fun getNavigationBarHeight(): Int {
-        if (navigationBarInsetPx > 0) return navigationBarInsetPx
         val id = resources.getIdentifier("navigation_bar_height", "dimen", "android")
         return if (id > 0) resources.getDimensionPixelSize(id) else 0
     }
