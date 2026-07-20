@@ -14,6 +14,10 @@ data class OverlaySettings(
     // campionamento — quella vive per davvero nella status bar (non è un
     // overlay), a costo di poter mostrare solo 3-4 caratteri e non poter
     // scegliere la sua posizione nel vassoio icone (decide il sistema).
+    // NOTIFICATION_TEXT mostra i valori solo come testo della notifica
+    // persistente (icona statica dell'app, nessun overlay): stesso testo che
+    // OVERLAY scrive già nella notifica obbligatoria del foreground service,
+    // ma senza la finestra flottante.
     val indicatorMode: IndicatorMode = IndicatorMode.OVERLAY,
 
     val verticalAnchor: VerticalAnchor = VerticalAnchor.TOP,
@@ -29,7 +33,7 @@ data class OverlaySettings(
     val fontSizeSp: Int = 12,
     val bold: Boolean = false,
     val showPerSecondSuffix: Boolean = true,
-    val updateIntervalMs: Long = 1500L,
+    val updateIntervalMs: Long = 1000L,
     val dimWhenIdle: Boolean = true,
     val idleThresholdBytesPerSec: Long = 1024L, // 1 KB/s
     val idleAlpha: Float = 0.35f,
@@ -69,7 +73,7 @@ data class OverlaySettings(
     val notificationAutoFit: Boolean = true
 )
 
-enum class IndicatorMode { OVERLAY, NOTIFICATION_ICON }
+enum class IndicatorMode { OVERLAY, NOTIFICATION_ICON, NOTIFICATION_TEXT }
 enum class VerticalAnchor { TOP, BOTTOM }
 enum class DisplayMode { STACKED, INLINE }
 enum class IconStyle { NONE, ARROWS, LETTERS }

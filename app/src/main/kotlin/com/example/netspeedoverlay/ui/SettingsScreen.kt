@@ -44,6 +44,7 @@ import com.example.netspeedoverlay.data.NotificationMetric
 import com.example.netspeedoverlay.data.OverlaySettings
 import com.example.netspeedoverlay.data.SettingsRepository
 import com.example.netspeedoverlay.data.VerticalAnchor
+import com.example.netspeedoverlay.overlay.NetSpeedOverlayService
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,11 +59,11 @@ fun SettingsScreen(
 ) {
     val settings by settingsRepository.settingsFlow.collectAsState(initial = OverlaySettings())
     val scope = rememberCoroutineScope()
-    // NOTE: this only tracks "did I press start/stop in this screen session",
-    // it doesn't query the real service state (e.g. after process death).
-    // Fine for a first version; a StateFlow exposed by the service is the
-    // natural next step if that gap matters to you.
-    var indicatorRunning by remember { mutableStateOf(false) }
+    // Stato reale del servizio (StateFlow esposto da NetSpeedOverlayService),
+    // non più un booleano locale: così il pulsante resta corretto anche se il
+    // servizio viene avviato/fermato da fuori questa schermata o ucciso dal
+    // sistema.
+    val indicatorRunning by NetSpeedOverlayService.isRunning.collectAsState()
     var showResetConfirm by remember { mutableStateOf(false) }
 
     Column(
@@ -93,13 +94,23 @@ fun SettingsScreen(
             }
         }
 
+        if (settings.indicatorMode == IndicatorMode.NOTIFICATION_TEXT) {
+            Text(
+                "Mostra i valori solo come testo della notifica persistente del servizio " +
+                    "(visibile aprendo la tendina), senza overlay flottante né icona " +
+                    "ridisegnata: utile se preferisci un indicatore meno invadente, dato che " +
+                    "la notifica del servizio in foreground è comunque obbligatoria su " +
+                    "qualunque modalità.",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
         val needsOverlayPermission = settings.indicatorMode == IndicatorMode.OVERLAY && !hasOverlayPermission
         if (needsOverlayPermission) {
             PermissionCard(onRequestOverlayPermission)
         } else {
             Button(onClick = {
-                indicatorRunning = !indicatorRunning
-                if (indicatorRunning) onStartOverlay() else onStopOverlay()
+                if (indicatorRunning) onStopOverlay() else onStartOverlay()
             }) {
                 Text(if (indicatorRunning) "Ferma indicatore" else "Avvia indicatore")
             }
@@ -200,13 +211,19 @@ fun SettingsScreen(
             }
         }
 
+        } // fine sezione "Posizione", esclusiva di IndicatorMode.OVERLAY
+
+        if (settings.indicatorMode == IndicatorMode.OVERLAY || settings.indicatorMode == IndicatorMode.NOTIFICATION_TEXT) {
+
         SectionLabel("Formato")
-        ChoiceRow(DisplayMode.entries, settings.displayMode, { it.label() }) {
-            scope.launch { settingsRepository.setDisplayMode(it) }
-        }
-        if (settings.displayMode == DisplayMode.STACKED) {
-            SliderSetting("Distanza tra le righe", settings.lineSpacingDp, -30..24, { "$it dp" }) {
-                scope.launch { settingsRepository.setLineSpacingDp(it) }
+        if (settings.indicatorMode == IndicatorMode.OVERLAY) {
+            ChoiceRow(DisplayMode.entries, settings.displayMode, { it.label() }) {
+                scope.launch { settingsRepository.setDisplayMode(it) }
+            }
+            if (settings.displayMode == DisplayMode.STACKED) {
+                SliderSetting("Distanza tra le righe", settings.lineSpacingDp, -30..24, { "$it dp" }) {
+                    scope.launch { settingsRepository.setLineSpacingDp(it) }
+                }
             }
         }
         ChoiceRow(IconStyle.entries, settings.iconStyle, { it.label() }) {
@@ -215,6 +232,10 @@ fun SettingsScreen(
         SwitchSetting("Mostra suffisso \"/s\"", settings.showPerSecondSuffix) {
             scope.launch { settingsRepository.setShowPerSecondSuffix(it) }
         }
+
+        } // fine sezione "Formato", condivisa tra OVERLAY e NOTIFICATION_TEXT
+
+        if (settings.indicatorMode == IndicatorMode.OVERLAY) {
 
         SectionLabel("Aspetto")
         ColorSwatchRow(
@@ -248,7 +269,7 @@ fun SettingsScreen(
             scope.launch { settingsRepository.setBold(it) }
         }
 
-        } // fine sezioni esclusive di IndicatorMode.OVERLAY
+        } // fine sezione "Aspetto", esclusiva di IndicatorMode.OVERLAY
 
         SectionLabel("Comportamento")
         SliderSetting(
@@ -422,6 +443,7 @@ private fun <T> ChoiceRow(
 private fun IndicatorMode.label() = when (this) {
     IndicatorMode.OVERLAY -> "Overlay"
     IndicatorMode.NOTIFICATION_ICON -> "Icona notifica"
+    IndicatorMode.NOTIFICATION_TEXT -> "Solo notifica"
 }
 
 private fun NotificationMetric.label() = when (this) {

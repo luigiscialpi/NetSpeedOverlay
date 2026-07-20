@@ -11,12 +11,12 @@ altre app, quindi funziona su qualunque Android/OEM ma non è "dentro" la
 vera status bar. Nessun codice è stato copiato da CustoMIUIzer — solo
 l'elenco di funzionalità/impostazioni, riscritto da zero in Kotlin/Compose.
 
-## Due modalità
+## Tre modalità
 
 Un vero hook sulla status bar reale (come fa CustoMIUIzer) richiede root:
 è un confine di sicurezza del sistema operativo, non un permesso aggirabile
-(vedi commit history / discussione per i dettagli). Ci sono però due modi
-non-root per mostrare il valore, entrambi selezionabili da "Modalità" nelle
+(vedi commit history / discussione per i dettagli). Ci sono però modi
+non-root per mostrare il valore, tutti selezionabili da "Modalità" nelle
 impostazioni:
 
 - **Overlay** — la finestra flottante descritta sopra: aspetto e
@@ -31,6 +31,14 @@ impostazioni:
   `SpeedSampler.format(..., compactUnit=true)` nell'icona), un solo valore
   alla volta (download, upload o combinato — non entrambi come nell'overlay)
   e la posizione nel vassoio la decide il sistema, non l'app.
+- **Solo notifica** — nessuna finestra flottante e nessuna icona
+  ridisegnata: solo il testo della notifica persistente del foreground
+  service (stessi valori/formato che la modalità Overlay scrive già nella
+  propria notifica obbligatoria, vedi `NetSpeedOverlayService.updateNotificationText`),
+  visibile aprendo la tendina. Utile come indicatore meno invadente su
+  device dove quella notifica è comunque impossibile da nascondere del
+  tutto (es. MIUI/HyperOS): tanto vale renderla utile invece che lasciarla
+  con il testo statico "Indicatore attivo".
 
 ### Icona notifica a due righe
 
@@ -186,13 +194,6 @@ Non replicato:
 
 ## Limitazioni note / prossimi passi
 
-- Il pulsante Avvia/Ferma in `SettingsScreen` tiene uno stato locale
-  (`indicatorRunning`), non interroga il servizio reale — se il servizio viene
-  ucciso dal sistema o l'app viene riaperta dopo un riavvio, il pulsante può
-  disallinearsi. Soluzione naturale: esporre uno `StateFlow` dal service
-  (es. tramite un `LocalBroadcastManager`-free binder, o più semplice, un
-  singleton/`object` con `MutableStateFlow` osservato sia dal service che
-  dalla UI).
 - `verticalOffsetDp` in modalità Overlay resta un valore fisso scelto
   dall'utente quando ancorato in alto (`VerticalAnchor.TOP`): non è calcolato
   dall'altezza reale della status bar. L'ancoraggio in basso invece usa già
@@ -204,7 +205,7 @@ Non replicato:
   meccanismo aggiuntivo (valutato e scartato l'uso di un AccessibilityService
   dedicato, il cui segnale si è rivelato inaffidabile).
 - Modalità "Icona notifica": aggiorna la notifica ad ogni campionamento
-  (default 1.5s). Nessun limite hard noto lato OS, ma è comunque un
+  (default 1.0s). Nessun limite hard noto lato OS, ma è comunque un
   aggiornamento più frequente del solito per una notifica — se noti consumo
   batteria anomalo su un device specifico, alza l'intervallo. Storicamente
   tecniche simili (icone di notifica come indicatore dati) si sono rotte a

@@ -46,10 +46,13 @@ import com.example.netspeedoverlay.data.SettingsRepository
 import com.example.netspeedoverlay.speed.SpeedSampler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Foreground service driving the network-speed indicator in one of two
+ * Foreground service driving the network-speed indicator in one of three
  * mutually exclusive modes, switchable at runtime from the settings screen:
  *
  * - [IndicatorMode.OVERLAY]: the floating [WindowManager] window (unchanged
@@ -60,6 +63,11 @@ import kotlinx.coroutines.launch
  *   overlay), at the cost of fitting only ~3 compact characters and having
  *   its position in the icon tray decided by the system, not us — see
  *   README for why that trade-off exists.
+ * - [IndicatorMode.NOTIFICATION_TEXT]: no floating window and no redrawn
+ *   icon — just the ongoing notification's text (same values/format as
+ *   OVERLAY writes into its own notification, see [updateNotificationText]),
+ *   for a less intrusive indicator on devices where that notification is
+ *   unavoidable anyway.
  *
  * Deliberately uses plain [android.view.View]s for the overlay rather than
  * a ComposeView: a ComposeView hosted outside an Activity needs a manually
@@ -96,6 +104,7 @@ class NetSpeedOverlayService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
+        _isRunning.value = true
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         settingsRepository = SettingsRepository(applicationContext)
         startForegroundWithNotification()
@@ -116,6 +125,7 @@ class NetSpeedOverlayService : LifecycleService() {
         samplingJob?.cancel()
         insetsPollingJob?.cancel()
         overlayRoot?.let { runCatching { windowManager.removeView(it) } }
+        _isRunning.value = false
         super.onDestroy()
     }
 
@@ -552,7 +562,8 @@ class NetSpeedOverlayService : LifecycleService() {
                     lastKnownMode = settings.indicatorMode
                     when (settings.indicatorMode) {
                         IndicatorMode.OVERLAY -> if (overlayRoot == null) addOverlayView()
-                        IndicatorMode.NOTIFICATION_ICON -> removeOverlayView()
+                        IndicatorMode.NOTIFICATION_ICON,
+                        IndicatorMode.NOTIFICATION_TEXT -> removeOverlayView()
                     }
                 }
 
@@ -695,9 +706,10 @@ class NetSpeedOverlayService : LifecycleService() {
                     when (settings.indicatorMode) {
                         IndicatorMode.OVERLAY -> {
                             updateTexts(sample, settings)
-                            updateOverlayNotificationText(sample, settings)
+                            updateNotificationText(sample, settings)
                         }
                         IndicatorMode.NOTIFICATION_ICON -> updateNotificationIcon(sample, settings)
+                        IndicatorMode.NOTIFICATION_TEXT -> updateNotificationText(sample, settings)
                     }
                 }
                 delay(settings.updateIntervalMs)
@@ -726,14 +738,16 @@ class NetSpeedOverlayService : LifecycleService() {
     /**
      * Aggiorna il testo della notifica persistente del foreground service
      * (obbligatoria per restare in foreground, quindi comunque visibile) con
-     * i valori live di download/upload, anche in modalità Overlay. Su alcuni
-     * device (es. MIUI/HyperOS) questa notifica non è nascondibile/collassabile
-     * del tutto, quindi tanto vale mostrarci qualcosa di utile invece del testo
+     * i valori live di download/upload — usata sia in modalità Overlay che
+     * NOTIFICATION_TEXT (l'unica differenza tra le due è la finestra
+     * flottante, presente solo nella prima). Su alcuni device (es.
+     * MIUI/HyperOS) questa notifica non è nascondibile/collassabile del
+     * tutto, quindi tanto vale mostrarci qualcosa di utile invece del testo
      * statico "Indicatore attivo". L'icona resta quella statica dell'app: i
-     * numeri li mostra già l'overlay sullo schermo, non serve ridisegnarla
-     * come si fa in modalità NOTIFICATION_ICON (vedi [updateNotificationIcon]).
+     * numeri li disegna solo la modalità NOTIFICATION_ICON (vedi
+     * [updateNotificationIcon]).
      */
-    private fun updateOverlayNotificationText(sample: SpeedSampler.Sample, settings: OverlaySettings) {
+    private fun updateNotificationText(sample: SpeedSampler.Sample, settings: OverlaySettings) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -751,6 +765,14 @@ class NetSpeedOverlayService : LifecycleService() {
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "net_speed_overlay"
+
+        // Stato reale del servizio (true tra onCreate() e onDestroy()), così
+        // la UI non deve più tenere un booleano locale scollegato dal servizio
+        // vero — vedi il commento che c'era su indicatorRunning in
+        // SettingsScreen prima di questo fix: si disallineava se il servizio
+        // veniva ucciso dal sistema o avviato/fermato da fuori dalla UI.
+        private val _isRunning = MutableStateFlow(false)
+        val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, NetSpeedOverlayService::class.java))
