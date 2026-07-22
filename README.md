@@ -131,6 +131,62 @@ di sistema non legati alle barre. Non valeva il costo (permesso extra,
 schermata di sistema poco rassicurante da concedere) per un guadagno così
 incerto.
 
+## Colori della navigation bar: perché non c'è un rilevamento automatico
+
+No: non esiste un modo, nemmeno con permessi extra ragionevoli, per leggere
+a runtime il colore reale (sfondo e icone dei pulsanti) della navigation bar
+dell'app in primo piano, senza root. Non è mai finito nel README fin qui, ma
+è stato davvero tentato e poi tolto — cronologia Git, commit `2290ce2` e
+rimozione in `4bf8d08`.
+
+Perché manca un'API pubblica per questo:
+
+- `WindowInsets`/`WindowInsetsCompat` (già usati sopra per la visibilità
+  delle barre) espongono solo geometria e visibilità, mai colori: servono a
+  fare layout, non a "leggere" la UI di un'altra app.
+- `Window.setStatusBarColor()`/`setNavigationBarColor()` e i flag di aspetto
+  (`WindowInsetsController.setSystemBarsAppearance` con
+  `APPEARANCE_LIGHT_STATUS_BARS`/`APPEARANCE_LIGHT_NAVIGATION_BARS`) sono
+  **solo setter sulla propria Window**: non esiste un getter equivalente che
+  un processo diverso possa interrogare per sapere cosa ha impostato l'app
+  in primo piano.
+- Da Android 15 (API 35; questo progetto compila con `compileSdk`/`targetSdk
+  = 36`) l'edge-to-edge è forzato per le app che puntano a quell'SDK: sempre
+  più spesso la barra non ha un colore "di sistema" fisso da leggere, è
+  trasparente e mostra i pixel disegnati dall'app sotto — quindi non
+  sarebbe comunque una proprietà interrogabile, ma un dettaglio di
+  rendering privato di quella finestra.
+- L'unico modo per ottenere il colore vero (pixel reali, incluso quello dei
+  pulsanti) è una cattura schermo: `MediaProjection`, che richiede consenso
+  esplicito dell'utente a ogni sessione (dialog di sistema "quest'app può
+  registrare tutto ciò che appare sullo schermo" + indicatore di
+  registrazione persistente) — sproporzionato per leggere due colori, e in
+  contrasto con l'obiettivo "root-free" del progetto — oppure
+  `adb shell screencap`/root, esplicitamente fuori scope (vedi introduzione).
+
+Il tentativo reale fatto in questo repo (commit `2290ce2`, rimosso in
+`4bf8d08` insieme a tutto `SystemBarAccessibilityService`) non leggeva
+comunque il colore vero: usava un `AccessibilityService` per **indovinare**
+se l'app in primo piano fosse chiara o scura, risalendo al tema dichiarato
+nel manifest via `PackageManager`/`Resources.Theme` (prima l'attributo
+`android.R.attr.isLightTheme`, poi la luminanza di
+`android.R.attr.colorBackground`, infine il fallback al tema di sistema) e
+scegliendo tra due palette fisse (bianco su nero / nero su bianco), non il
+colore effettivo della barra. Il limite era strutturale, non solo di
+permesso: quel lookup legge il tema *statico* dichiarato nel manifest, quindi
+resta cieco su tutte le app (moltissime, specie ora che l'edge-to-edge è la
+norma) che impostano il colore delle barre via codice a runtime. È stato
+rimosso insieme al resto dell'`AccessibilityService` perché l'altro segnale
+che produceva (rilevamento fullscreen via finestre `TYPE_SYSTEM`) si è
+rivelato inaffidabile sul campo — non per un problema specifico di questa
+euristica sui colori, ma il costo di un permesso così invasivo non si
+giustificava più per tenerla in vita da sola.
+
+Per questo `textColorArgb`/`backgroundColorArgb` in `OverlaySettings.kt`
+restano impostazioni manuali: l'utente sceglie i colori per abbinarli alla
+propria barra, invece di un'euristica automatica che potrebbe sbagliare in
+silenzio.
+
 ## Struttura
 
 ```
