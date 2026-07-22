@@ -187,19 +187,64 @@ restano impostazioni manuali: l'utente sceglie i colori per abbinarli alla
 propria barra, invece di un'euristica automatica che potrebbe sbagliare in
 silenzio.
 
+## Dati di oggi: consumo giornaliero cumulativo
+
+Oltre alla velocità istantanea, l'app accumula in `DailyUsageRepository`
+i byte totali scaricati e caricati "oggi" (giorno di calendario locale,
+reset automatico a mezzanotte). L'accumulo usa i delta grezzi prodotti da
+ogni campionamento di `SpeedSampler` (byte realmente trasferiti nel tick,
+non `bytesPerSec * intervallo`), quindi resta corretto anche dopo un
+riavvio del telefono — dove i contatori assoluti di `TrafficStats` si
+azzerano e il primo sample torna `null`. La card in cima alla schermata
+impostazioni mostra i totali con `SpeedSampler.formatTotalBytes()` che
+scala fino ai GB.
+
+## Riavvio automatico al boot
+
+Opzionale (default OFF) e opt-in esplicito dall'utente tramite switch in
+impostazioni. Quando attivo, `BootReceiver` risponde a
+`BOOT_COMPLETED` — uno dei pochi broadcast impliciti per cui Android
+permette ancora un receiver dichiarato nel manifest — e riavvia il
+foreground service, purché il permesso overlay fosse già stato concesso
+in precedenza. L'app è quindi autorizzata a chiamare
+`startForegroundService()` da background in risposta a questo broadcast.
+
+## Quick Settings Tile
+
+`NetSpeedTileService` aggiunge una tile nelle Impostazioni rapidi per
+accendere/spegnere il servizio senza aprire l'app. È solo un interruttore
+on/off: le tile di sistema non sono pensate per aggiornarsi ogni secondo,
+quindi non mostra la velocità live. Se il permesso overlay manca, il click
+apre l'app invece di fallire silenziosamente.
+
+## Sparkline opzionale
+
+In modalità Overlay è disponibile un mini-grafico (default OFF) della
+cronologia recente di download+upload combinati. Versione volutamente
+minimal: una sola linea, buffer fisso di 30 campioni, nessuna etichetta
+o asse, colore uguale al testo dell'overlay. Nascondendola con `View.GONE`
+(nel layout figlio, non nel `overlayRoot` che continua a ricevere
+WindowInsets) libera lo spazio occupato quando disattivata.
+
 ## Struttura
 
 ```
 app/src/main/kotlin/com/example/netspeedoverlay/
 ├── MainActivity.kt              host Compose + richiesta permessi overlay/notifiche
+├── boot/
+│   └── BootReceiver.kt          BOOT_COMPLETED → riavvio automatico opzionale
 ├── data/
+│   ├── DailyUsageRepository.kt  byte totali scaricati/caricati "oggi"
 │   ├── OverlaySettings.kt       modello delle opzioni (enum + data class)
 │   └── SettingsRepository.kt    persistenza via DataStore, Flow reattivo
 ├── speed/
 │   └── SpeedSampler.kt          delta TrafficStats -> byte/sec, formattazione
 ├── overlay/
-│   └── NetSpeedOverlayService.kt  foreground service: overlay WindowManager
-│                                   o icona notifica, a seconda di indicatorMode
+│   ├── NetSpeedOverlayService.kt  foreground service: overlay WindowManager
+│   │                               o icona notifica, a seconda di indicatorMode
+│   └── SparklineView.kt         mini-grafico opzionale nell'overlay
+├── tile/
+│   └── NetSpeedTileService.kt   Quick Settings Tile on/off
 └── ui/
     ├── SettingsScreen.kt        schermata impostazioni Compose
     └── theme/Theme.kt           tema Material3 minimale
@@ -233,6 +278,19 @@ Non replicato:
 - `fixedcontent_width` (larghezza fissa per evitare che il testo "salti" cambiando cifre) — facile da aggiungere se ti dà fastidio, basta un `Modifier`/`minWidth` sul TextView.
 - `notification_font_size_pct` — percentuale di ridimensionamento del font dell'icona notifica rispetto alla dimensione auto-calcolata.
 - `notification_auto_fit` — gestione automatica del font per adattarlo allo spazio disponibile, con boost del 20% per valori a 1-2 cifre senza punto/virgola.
+
+### Novità rispetto al piano iniziale
+
+- Formattazione numerica indipendente dalla locale (`Locale.US` in tutti i
+  `String.format` del sampler), per evitare che un device in italiano
+  mostri la virgola come separatore decimale.
+- `NetSpeedOverlayService` ha `android:exported="false"` (non serviva
+  esporlo, visto che solo la stessa app lo avvia).
+- Unit test JUnit4 per `SpeedSampler` in `app/src/test/kotlin/` (richiede
+  il sourceSet `test.kotlin.srcDirs` esplicito, dato che il progetto usa
+  `src/main/kotlin` anziché `src/main/java`).
+- Dati di oggi, riavvio automatico al boot, Quick Settings Tile e sparkline
+  opzionale (vedi sezioni dedicate sopra).
 
 ## Setup
 

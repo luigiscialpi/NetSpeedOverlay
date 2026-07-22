@@ -37,6 +37,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import android.os.Build
 import com.example.netspeedoverlay.R
+import com.example.netspeedoverlay.data.DailyUsage
+import com.example.netspeedoverlay.data.DailyUsageRepository
 import com.example.netspeedoverlay.data.DisplayMode
 import com.example.netspeedoverlay.data.IconStyle
 import com.example.netspeedoverlay.data.IndicatorMode
@@ -45,12 +47,14 @@ import com.example.netspeedoverlay.data.OverlaySettings
 import com.example.netspeedoverlay.data.SettingsRepository
 import com.example.netspeedoverlay.data.VerticalAnchor
 import com.example.netspeedoverlay.overlay.NetSpeedOverlayService
+import com.example.netspeedoverlay.speed.SpeedSampler
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     settingsRepository: SettingsRepository,
+    dailyUsageRepository: DailyUsageRepository,
     hasOverlayPermission: Boolean,
     onRequestOverlayPermission: () -> Unit,
     onStartOverlay: () -> Unit,
@@ -58,6 +62,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val settings by settingsRepository.settingsFlow.collectAsState(initial = OverlaySettings())
+    val dailyUsage by dailyUsageRepository.dailyUsageFlow.collectAsState(initial = DailyUsage(0L, 0L))
     val scope = rememberCoroutineScope()
     // Stato reale del servizio (StateFlow esposto da NetSpeedOverlayService),
     // non più un booleano locale: così il pulsante resta corretto anche se il
@@ -74,6 +79,17 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         Text("Indicatore velocità di rete", style = MaterialTheme.typography.headlineSmall)
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Dati di oggi", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "↓ ${SpeedSampler.formatTotalBytes(dailyUsage.rxBytes)}   " +
+                        "↑ ${SpeedSampler.formatTotalBytes(dailyUsage.txBytes)}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
 
         SectionLabel("Modalità")
         ChoiceRow(IndicatorMode.entries, settings.indicatorMode, { it.label() }) {
@@ -114,6 +130,9 @@ fun SettingsScreen(
             }) {
                 Text(if (indicatorRunning) "Ferma indicatore" else "Avvia indicatore")
             }
+        }
+        SwitchSetting("Avvia automaticamente all'accensione", settings.autoStartOnBoot) {
+            scope.launch { settingsRepository.setAutoStartOnBoot(it) }
         }
 
         HorizontalDivider()
@@ -267,6 +286,9 @@ fun SettingsScreen(
         }
         SwitchSetting("Grassetto", settings.bold) {
             scope.launch { settingsRepository.setBold(it) }
+        }
+        SwitchSetting("Mostra mini-grafico", settings.showSparkline) {
+            scope.launch { settingsRepository.setShowSparkline(it) }
         }
 
         } // fine sezione "Aspetto", esclusiva di IndicatorMode.OVERLAY

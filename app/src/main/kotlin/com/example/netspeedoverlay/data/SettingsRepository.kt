@@ -46,6 +46,8 @@ class SettingsRepository(private val context: Context) {
         val NOTIFICATION_LINE_SPACING = intPreferencesKey("notification_line_spacing")
         val NOTIFICATION_FONT_SIZE_PCT = intPreferencesKey("notification_font_size_pct")
         val NOTIFICATION_AUTO_FIT = booleanPreferencesKey("notification_auto_fit")
+        val AUTO_START_ON_BOOT = booleanPreferencesKey("auto_start_on_boot")
+        val SHOW_SPARKLINE = booleanPreferencesKey("show_sparkline")
     }
 
     val settingsFlow: Flow<OverlaySettings> = context.dataStore.data.map { prefs ->
@@ -89,7 +91,11 @@ class SettingsRepository(private val context: Context) {
             notificationFontSizePct = prefs[Keys.NOTIFICATION_FONT_SIZE_PCT]
                 ?: defaults.notificationFontSizePct,
             notificationAutoFit = prefs[Keys.NOTIFICATION_AUTO_FIT]
-                ?: defaults.notificationAutoFit
+                ?: defaults.notificationAutoFit,
+            autoStartOnBoot = prefs[Keys.AUTO_START_ON_BOOT]
+                ?: defaults.autoStartOnBoot,
+            showSparkline = prefs[Keys.SHOW_SPARKLINE]
+                ?: defaults.showSparkline
         )
     }
 
@@ -119,6 +125,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setNotificationLineSpacing(value: Int) = edit { it[Keys.NOTIFICATION_LINE_SPACING] = value }
     suspend fun setNotificationFontSizePct(value: Int) = edit { it[Keys.NOTIFICATION_FONT_SIZE_PCT] = value }
     suspend fun setNotificationAutoFit(value: Boolean) = edit { it[Keys.NOTIFICATION_AUTO_FIT] = value }
+    suspend fun setAutoStartOnBoot(value: Boolean) = edit { it[Keys.AUTO_START_ON_BOOT] = value }
+    suspend fun setShowSparkline(value: Boolean) = edit { it[Keys.SHOW_SPARKLINE] = value }
 
     suspend fun resetSettings() = edit { it.clear() }
 

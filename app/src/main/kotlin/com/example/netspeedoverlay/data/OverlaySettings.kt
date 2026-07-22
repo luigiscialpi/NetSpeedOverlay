@@ -70,7 +70,17 @@ data class OverlaySettings(
 
     // Solo per NOTIFICATION_ICON: se true, ridimensiona automaticamente il testo
     // se supera lo spazio orizzontale dell'icona.
-    val notificationAutoFit: Boolean = true
+    val notificationAutoFit: Boolean = true,
+
+    // Se true, il servizio si riavvia da solo dopo il boot del device
+    // (solo se il permesso overlay è già stato concesso in precedenza).
+    // Vedi boot/BootReceiver.kt.
+    val autoStartOnBoot: Boolean = false,
+
+    // Solo per indicatorMode = OVERLAY: mostra un mini-grafico opzionale
+    // della cronologia recente (download+upload combinati) accanto al
+    // testo. Default OFF. Vedi overlay/SparklineView.kt.
+    val showSparkline: Boolean = false
 )
 
 enum class IndicatorMode { OVERLAY, NOTIFICATION_ICON, NOTIFICATION_TEXT }

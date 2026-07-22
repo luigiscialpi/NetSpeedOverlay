@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import com.example.netspeedoverlay.data.DailyUsageRepository
 import com.example.netspeedoverlay.data.SettingsRepository
 import com.example.netspeedoverlay.overlay.NetSpeedOverlayService
 import com.example.netspeedoverlay.ui.SettingsScreen
@@ -22,6 +23,7 @@ import com.example.netspeedoverlay.ui.theme.NetSpeedOverlayTheme
 class MainActivity : ComponentActivity() {
 
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var dailyUsageRepository: DailyUsageRepository
     private val hasOverlayPermission = mutableStateOf(false)
 
     private val notificationPermissionLauncher =
@@ -35,6 +37,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settingsRepository = SettingsRepository(applicationContext)
+        dailyUsageRepository = DailyUsageRepository(applicationContext)
         requestNotificationPermissionIfNeeded()
         refreshOverlayPermissionState()
 
@@ -43,6 +46,7 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     SettingsScreen(
                         settingsRepository = settingsRepository,
+                        dailyUsageRepository = dailyUsageRepository,
                         hasOverlayPermission = hasOverlayPermission.value,
                         onRequestOverlayPermission = ::requestOverlayPermission,
                         onStartOverlay = { NetSpeedOverlayService.start(this) },

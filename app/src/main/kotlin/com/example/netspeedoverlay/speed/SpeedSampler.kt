@@ -1,6 +1,7 @@
 package com.example.netspeedoverlay.speed
 
 import android.net.TrafficStats
+import java.util.Locale
 import kotlin.math.max
 
 /**
@@ -27,7 +28,12 @@ class SpeedSampler {
     private var lastTxBytes: Long = -1L
     private var lastTimestampMs: Long = -1L
 
-    data class Sample(val rxBytesPerSec: Long, val txBytesPerSec: Long)
+    data class Sample(
+        val rxBytesPerSec: Long,
+        val txBytesPerSec: Long,
+        val rxBytesDelta: Long,
+        val txBytesDelta: Long
+    )
 
     /**
      * Call this on a timer. Returns null on the very first call (nothing to
@@ -50,7 +56,9 @@ class SpeedSampler {
             val txDelta = (tx - lastTxBytes).coerceAtLeast(0)
             Sample(
                 rxBytesPerSec = (rxDelta / elapsedSec).toLong(),
-                txBytesPerSec = (txDelta / elapsedSec).toLong()
+                txBytesPerSec = (txDelta / elapsedSec).toLong(),
+                rxBytesDelta = rxDelta,
+                txBytesDelta = txDelta
             )
         }
 
@@ -72,17 +80,17 @@ class SpeedSampler {
                     "0$sep$unit$suffix"
                 }
                 bytesPerSec < 1024 -> {
-                    val num = String.format("%.1f", bytesPerSec / 1024.0)
+                    val num = String.format(Locale.US, "%.1f", bytesPerSec / 1024.0)
                     val sep = if (compactUnit && num.length >= 3) "" else " "
                     "$num$sep$unit$suffix"
                 }
                 bytesPerSec < 1024 * 1024 -> {
-                    val num = String.format("%.0f", bytesPerSec / 1024.0)
+                    val num = String.format(Locale.US, "%.0f", bytesPerSec / 1024.0)
                     val sep = if (compactUnit && num.length >= 3) "" else " "
                     "$num$sep$unit$suffix"
                 }
                 else -> {
-                    val num = String.format("%.1f", bytesPerSec / (1024.0 * 1024.0))
+                    val num = String.format(Locale.US, "%.1f", bytesPerSec / (1024.0 * 1024.0))
                     val sep = if (compactUnit && num.length >= 3) "" else " "
                     "$num$sep$mbUnit$suffix"
                 }
@@ -95,9 +103,22 @@ class SpeedSampler {
          */
         fun formatCompact(bytesPerSec: Long): String = when {
             bytesPerSec == 0L -> "0K"
-            bytesPerSec < 1024 -> String.format("%.1fK", bytesPerSec / 1024.0)
+            bytesPerSec < 1024 -> String.format(Locale.US, "%.1fK", bytesPerSec / 1024.0)
             bytesPerSec < 1024 * 1024 -> "${bytesPerSec / 1024}K"
-            else -> String.format("%.1fM", bytesPerSec / (1024.0 * 1024.0))
+            else -> String.format(Locale.US, "%.1fM", bytesPerSec / (1024.0 * 1024.0))
+        }
+
+        /**
+         * Formatta un conteggio di byte assoluto (non un rate/sec) come i
+         * totali giornalieri di DailyUsageRepository — scala fino ai GB,
+         * a differenza di format()/formatCompact() che si fermano a MB
+         * perché una VELOCITÀ in GB/s non è realistica su un device.
+         */
+        fun formatTotalBytes(bytes: Long): String = when {
+            bytes < 1024 -> "$bytes B"
+            bytes < 1024 * 1024 -> String.format(Locale.US, "%.1f KB", bytes / 1024.0)
+            bytes < 1024 * 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+            else -> String.format(Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
         }
     }
 }

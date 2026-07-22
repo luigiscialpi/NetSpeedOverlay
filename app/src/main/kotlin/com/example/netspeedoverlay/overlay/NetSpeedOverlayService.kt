@@ -36,6 +36,7 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.example.netspeedoverlay.MainActivity
 import com.example.netspeedoverlay.R
+import com.example.netspeedoverlay.data.DailyUsageRepository
 import com.example.netspeedoverlay.data.DisplayMode
 import com.example.netspeedoverlay.data.IconStyle
 import com.example.netspeedoverlay.data.IndicatorMode
@@ -81,12 +82,14 @@ class NetSpeedOverlayService : LifecycleService() {
 
     private lateinit var windowManager: WindowManager
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var dailyUsageRepository: DailyUsageRepository
     private val sampler = SpeedSampler()
 
     private var overlayRoot: LinearLayout? = null
     private var downloadText: TextView? = null
     private var uploadText: TextView? = null
     private var overlayBackground: GradientDrawable? = null
+    private var sparklineView: SparklineView? = null
     private var layoutParams: WindowManager.LayoutParams? = null
 
     // Stato "reale" delle barre di sistema, aggiornato da observeWindowInsets()
@@ -107,6 +110,7 @@ class NetSpeedOverlayService : LifecycleService() {
         _isRunning.value = true
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         settingsRepository = SettingsRepository(applicationContext)
+        dailyUsageRepository = DailyUsageRepository(applicationContext)
         startForegroundWithNotification()
         // No unconditional addOverlayView() here anymore: the first emission
         // from observeSettings() creates the overlay (or doesn't) depending
@@ -326,8 +330,25 @@ class NetSpeedOverlayService : LifecycleService() {
             setPadding(0, 0, 0, 0)
             setLineSpacing(0f, 1f)
         }
-        root.addView(upload)
-        root.addView(download)
+        val textColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(upload)
+            addView(download)
+        }
+
+        val sparkline = SparklineView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(40), dp(16)).apply {
+                marginStart = dp(6)
+            }
+        }
+        sparklineView = sparkline
+
+        val contentRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(textColumn)
+            addView(sparkline)
+        }
+        root.addView(contentRow)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -438,6 +459,7 @@ class NetSpeedOverlayService : LifecycleService() {
         downloadText = null
         uploadText = null
         overlayBackground = null
+        sparklineView = null
         layoutParams = null
     }
 
@@ -634,10 +656,17 @@ class NetSpeedOverlayService : LifecycleService() {
             View.VISIBLE
         }
 
-        root.orientation = if (settings.displayMode == DisplayMode.STACKED) {
-            LinearLayout.VERTICAL
-        } else {
-            LinearLayout.HORIZONTAL
+        // I due TextView vivono dentro textColumn (primo figlio di contentRow,
+        // che è l'unico figlio di overlayRoot). Cambiare orientamento di
+        // textColumn permette di alternare STACKED (due righe) e INLINE
+        // (una riga) senza che lo SparklineView (sempre a destra in contentRow)
+        // influenzi la larghezza dei testi.
+        (root.getChildAt(0) as? LinearLayout)?.getChildAt(0)?.let { textColumn ->
+            (textColumn as? LinearLayout)?.orientation = if (settings.displayMode == DisplayMode.STACKED) {
+                LinearLayout.VERTICAL
+            } else {
+                LinearLayout.HORIZONTAL
+            }
         }
 
         listOf(downloadText, uploadText).forEach { tv ->
@@ -650,11 +679,19 @@ class NetSpeedOverlayService : LifecycleService() {
         // valori di default (testo chiaro su sfondo scuro).
         applyOverlayColors(settings)
 
+        // GONE (non INVISIBLE): questa è una view figlia senza listener di
+        // WindowInsets, a differenza di overlayRoot — nasconderla con GONE
+        // libera correttamente lo spazio nel layout.
+        sparklineView?.visibility = if (settings.showSparkline) View.VISIBLE else View.GONE
+        sparklineView?.setLineColor(settings.textColorArgb)
+
         // Spacing before the second row. Uses a LayoutParams margin (which can
         // be negative) instead of padding so that 0 dp really means "lines
         // touching": we subtract the font's own leading gap at 0 so the
         // residual fixed spacing disappears, and positive values add from there.
-        (root.getChildAt(1) as? TextView)?.let { tv ->
+        // In questo layout downloadText è sempre il secondo TextView dentro
+        // textColumn, quindi è quello che riceve lo spacing verso uploadText.
+        downloadText?.let { tv ->
             val lp = (tv.layoutParams as? LinearLayout.LayoutParams)
                 ?: LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -712,6 +749,10 @@ class NetSpeedOverlayService : LifecycleService() {
             while (true) {
                 val settings = currentSettings
                 sampler.sample()?.let { sample ->
+                    // Accumula sempre, indipendentemente da indicatorMode:
+                    // il consumo di oggi riguarda il traffico reale del
+                    // device, non come/se viene mostrato in questo momento.
+                    dailyUsageRepository.addSample(sample.rxBytesDelta, sample.txBytesDelta)
                     when (settings.indicatorMode) {
                         IndicatorMode.OVERLAY -> {
                             updateTexts(sample, settings)
@@ -736,6 +777,10 @@ class NetSpeedOverlayService : LifecycleService() {
         val idle = sample.rxBytesPerSec < settings.idleThresholdBytesPerSec &&
             sample.txBytesPerSec < settings.idleThresholdBytesPerSec
         overlayRoot?.alpha = if (settings.dimWhenIdle && idle) settings.idleAlpha else 1f
+
+        if (settings.showSparkline) {
+            sparklineView?.pushSample(sample.rxBytesPerSec + sample.txBytesPerSec)
+        }
     }
 
     private fun iconFor(style: IconStyle, isDownload: Boolean): String = when (style) {
